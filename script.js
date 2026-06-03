@@ -154,6 +154,7 @@ let state = {
   showWinRatesOverlay: false,
   winRatesSearch: "",
   winRatesTypeFilter: "all", // all, pockets, suited, offsuit
+  winRatesPlayersCount: "all", // all, 2, 3, 4, 5, 6
   
   // Active Tournament
   tour: {
@@ -223,10 +224,6 @@ function renderApp() {
     mount.classList.remove("eco-mode");
   }
   bindEvents();
-
-  if (state.showWinRatesOverlay) {
-    filterWinRatesDOM();
-  }
 }
 
 /**
@@ -430,61 +427,195 @@ function createHistoryScreenHtml() {
 /**
  * WIN RATES TABLE OVERLAY
  */
+function renderSingleMatrixGrid(P) {
+  const RANKS = ["A", "K", "Q", "J", "T", "9", "8", "7", "6", "5", "4", "3", "2"];
+  const idx = P - 2; // 2P is index 0, 3P is index 1, etc.
+  
+  // Dynamic top 30 calculations for this table (P)
+  const allCombinations = [];
+  for (let r = 0; r < RANKS.length; r++) {
+    for (let c = 0; c < RANKS.length; c++) {
+      let key = "";
+      if (r === c) {
+        key = RANKS[r] + RANKS[r];
+      } else if (r < c) {
+        key = RANKS[r] + RANKS[c] + "s";
+      } else {
+        key = RANKS[c] + RANKS[r] + "o";
+      }
+      const probs = PF_PROBS[key];
+      const val = (probs && probs[idx] !== undefined) ? probs[idx] : 0;
+      allCombinations.push({ key, val });
+    }
+  }
+  allCombinations.sort((a, b) => b.val - a.val);
+  const top30Set = new Set(allCombinations.slice(0, 30).map(item => item.key));
+
+  // Header row: blank top-left corner, then A to 2 labels
+  let colHeadersHtml = `
+    <tr class="bg-neutral-900 border-b border-neutral-800 text-[9px] font-bold select-none text-center">
+      <th class="p-0 border border-neutral-850 bg-neutral-950 font-display font-black text-amber-500 w-[22px] h-[22px] flex-shrink-0 text-center leading-none">
+        ${P}P
+      </th>
+      ${RANKS.map(col => `
+        <th class="p-0 border border-neutral-850 text-amber-500 w-[22px] h-[22px] font-extrabold text-center leading-none">
+          ${col}
+        </th>
+      `).join("")}
+    </tr>
+  `;
+
+  let rowsHtml = "";
+  for (let r = 0; r < RANKS.length; r++) {
+    const rowRank = RANKS[r];
+    
+    // Start row with vertical label (A down to 2)
+    let cellsHtml = `
+      <td class="p-0 bg-neutral-950 border border-neutral-850 text-amber-500 font-extrabold text-[9px] text-center w-[22px] h-[22px] select-none leading-none">
+        ${rowRank}
+      </td>
+    `;
+
+    for (let c = 0; c < RANKS.length; c++) {
+      const colRank = RANKS[c];
+      let handKey = "";
+      let isPocket = false;
+      let isSuited = false;
+
+      if (r === c) {
+        handKey = rowRank + rowRank;
+        isPocket = true;
+      } else if (r < c) {
+        // Upper-right side: Suited
+        handKey = rowRank + colRank + "s";
+        isSuited = true;
+      } else {
+        // Lower-left side: Offsuit
+        handKey = colRank + rowRank + "o";
+      }
+
+      const probs = PF_PROBS[handKey];
+      const val = (probs && probs[idx] !== undefined) ? probs[idx] : 0;
+      const isTop30 = top30Set.has(handKey);
+
+      // Color backgrounds based on value and hands type
+      let cellBg = "";
+      let borderStyle = "border-neutral-900";
+      let textClass = "";
+
+      if (isTop30) {
+        textClass = "text-emerald-400 font-black animate-pulse-slow";
+      } else if (isPocket) {
+        textClass = "text-amber-400/85 font-bold";
+      } else {
+        textClass = "text-neutral-300";
+      }
+
+      if (isPocket) {
+        cellBg = "bg-amber-500/10";
+        borderStyle = "border-amber-500/20";
+      } else if (isSuited) {
+        cellBg = "bg-neutral-900/30";
+        borderStyle = "border-neutral-850/40";
+      } else {
+        cellBg = "bg-neutral-900/15";
+        borderStyle = "border-neutral-850/20";
+      }
+
+      cellsHtml += `
+        <td class="p-0 text-center border ${borderStyle} ${cellBg} w-[22px] h-[22px]" title="${handKey}: ${val}%">
+          <div class="leading-none flex flex-col justify-center items-center h-full">
+            <span class="text-[5px] opacity-35 font-mono block tracking-tight select-none leading-none mb-0.5">${handKey}</span>
+            <span class="text-[7.5px] font-mono leading-none ${textClass}">${val}%</span>
+          </div>
+        </td>
+      `;
+    }
+
+    rowsHtml += `
+      <tr class="border-b border-neutral-900 leading-none">
+        ${cellsHtml}
+      </tr>
+    `;
+  }
+
+  const tableTitle = state.lang === "ja" 
+    ? `${P}人プレイ時の勝率表` 
+    : `${P}-Player Preflop Win Rate Matrix`;
+
+  return `
+    <div class="mb-6 p-4 bg-[#0a0a0a] border border-neutral-900 rounded-xl shadow-xl flex-shrink-0">
+      <div class="flex items-center justify-between mb-3.5 select-none">
+        <h3 class="text-xs font-black tracking-wider text-neutral-200 uppercase font-display flex items-center gap-1.5 align-middle">
+          <span class="w-1.5 h-1.5 rounded-full bg-amber-500 block animate-pulse"></span>
+          ${tableTitle}
+        </h3>
+        <span class="text-[8px] font-mono font-bold bg-neutral-950 text-neutral-500 uppercase px-2 py-0.5 rounded border border-neutral-850">
+          ${P === 2 ? "Heads-Up" : `${P}-Max`}
+        </span>
+      </div>
+
+      <!-- Compact Matrix Table -->
+      <div class="w-full rounded-lg border border-neutral-900 bg-[#040404] flex justify-center py-1.5 overflow-x-auto">
+        <table class="text-[9px] border-collapse" style="max-width: 100%; width: 308px;">
+          <thead>
+            ${colHeadersHtml}
+          </thead>
+          <tbody>
+            ${rowsHtml}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
+/**
+ * WIN RATES TABLE OVERLAY
+ */
 function createWinRatesOverlayHtml() {
   if (!state.showWinRatesOverlay) return "";
 
-  // Sort hands by 2-player win rate descending (indicating overall preflop raw strength)
-  const sortedHands = Object.entries(PF_PROBS).map(([hand, probs]) => {
-    let type = "offsuit";
-    if (hand.length === 2 && hand[0] === hand[1]) type = "pocket";
-    else if (hand.endsWith("s")) type = "suited";
-    return { hand, probs, type };
-  }).sort((a, b) => b.probs[0] - a.probs[0]);
+  const availableFilters = [
+    { id: "all", ja: "全テーブル", en: "All Tables" },
+    { id: 2, ja: "2人 (2P)", en: "2 Players" },
+    { id: 3, ja: "3人 (3P)", en: "3 Players" },
+    { id: 4, ja: "4人 (4P)", en: "4 Players" },
+    { id: 5, ja: "5人 (5P)", en: "5 Players" },
+    { id: 6, ja: "6人 (6P)", en: "6 Players" }
+  ];
 
-  const searchPlaceholderText = state.lang === "ja" ? "ハンドを検索 (例: AA, AKs, 72o)" : "Search Hand (e.g. AA, AKs, 72o)";
+  // Compile active grids
+  let gridsHtml = "";
+  if (state.winRatesPlayersCount === "all") {
+    gridsHtml = [2, 3, 4, 5, 6].map(count => renderSingleMatrixGrid(count)).join("");
+  } else {
+    gridsHtml = renderSingleMatrixGrid(Number(state.winRatesPlayersCount));
+  }
 
   return `
-    <div id="win-rates-overlay" class="absolute inset-0 bg-neutral-950 flex flex-col p-6 z-50 animate-fade-in">
+    <div id="win-rates-overlay" class="absolute inset-0 bg-neutral-950 flex flex-col p-6 z-50 animate-fade-in text-neutral-200">
       <!-- HEADER -->
       <div class="flex items-center justify-between mb-4 pb-3 border-b border-neutral-900 flex-shrink-0">
         <div>
           <h2 class="text-sm font-black tracking-wider text-amber-500 uppercase font-display">${state.lang === "ja" ? "人数別プリフロップ勝率一覧" : "Preflop Win Rates by Player Count"}</h2>
-          <p class="text-[9px] text-neutral-500 font-mono mt-0.5">${state.lang === "ja" ? "2人〜6人のスターティングハンド勝率" : "Preflop win probabilities for 2 to 6 players"}</p>
+          <p class="text-[9px] text-neutral-500 font-mono mt-0.5">${state.lang === "ja" ? "2人〜6人のスターティングハンド勝率マトリクス" : "Preflop win probabilities grids for 2 to 6 players"}</p>
         </div>
         <button id="btn-close-win-rates" class="text-xs text-neutral-400 font-medium bg-neutral-900 hover:bg-neutral-850 py-1.5 px-3 rounded-md hover:text-white transition-colors">
           ${t("back")}
         </button>
       </div>
 
-      <!-- SEARCH & FILTERS -->
-      <div class="flex-shrink-0 space-y-3 mb-4">
-        <!-- Searchbox -->
-        <div class="relative">
-          <input 
-            type="text" 
-            id="win-rates-search" 
-            placeholder="${searchPlaceholderText}" 
-            value="${state.winRatesSearch}"
-            class="w-full bg-neutral-900 border border-neutral-800 rounded-lg py-2.5 px-3.5 pl-9 text-xs text-neutral-200 outline-none focus:border-amber-500/50 transition-colors placeholder:text-neutral-600 font-mono"
-            oninput="handleWinRatesSearchInput(this.value)"
-          />
-          <svg class="absolute left-3 top-3 text-neutral-600" xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-        </div>
-
-        <!-- Filter tabs -->
-        <div class="flex gap-1.5 bg-neutral-900/50 p-1 rounded-lg border border-neutral-900">
-          ${[
-            { id: "all", ja: "全ハンド", en: "All" },
-            { id: "pocket", ja: "ペア", en: "Pairs" },
-            { id: "suited", ja: "同マーク", en: "Suited" },
-            { id: "offsuit", ja: "別マーク", en: "Offsuit" }
-          ].map(tab => {
+      <!-- TABS SELECTOR -->
+      <div class="flex-shrink-0 mb-4 bg-neutral-900/50 p-1 rounded-lg border border-neutral-900">
+        <div class="grid grid-cols-6 gap-1">
+          ${availableFilters.map(tab => {
             const label = state.lang === "ja" ? tab.ja : tab.en;
-            const active = state.winRatesTypeFilter === tab.id;
+            const active = state.winRatesPlayersCount === tab.id || (state.winRatesPlayersCount === "all" && tab.id === "all");
             return `
               <button 
-                class="flex-1 text-[10px] py-1.5 px-1 rounded-md text-center font-bold font-sans transition-colors ${active ? "bg-amber-500 text-neutral-950" : "text-neutral-400 hover:text-neutral-200"}"
-                onclick="handleWinRatesFilter('${tab.id}')"
+                class="text-[9px] py-1.5 px-0.5 rounded font-black font-sans transition-colors tracking-tight ${active ? "bg-amber-500 text-neutral-950" : "text-neutral-400 hover:text-neutral-200"}"
+                onclick="window.handleWinRatesPlayerTab('${tab.id}')"
               >
                 ${label}
               </button>
@@ -493,43 +624,33 @@ function createWinRatesOverlayHtml() {
         </div>
       </div>
 
-      <!-- WIN RATES TABLE -->
-      <div class="flex-1 overflow-y-auto overflow-x-hidden border border-neutral-900 rounded-lg bg-[#070707] min-h-0 select-text">
-        <table class="w-full text-[11px] border-collapse">
-          <thead class="sticky top-0 bg-neutral-900 text-neutral-400 font-mono tracking-tight text-[9px] font-bold uppercase select-none z-10 border-b border-neutral-800">
-            <tr>
-              <th class="py-2.5 px-3 text-left font-display font-black text-amber-500">${state.lang === "ja" ? "ハンド" : "Hand"}</th>
-              <th class="py-2.5 text-center px-1">2P</th>
-              <th class="py-2.5 text-center px-1">3P</th>
-              <th class="py-2.5 text-center px-1">4P</th>
-              <th class="py-2.5 text-center px-1">5P</th>
-              <th class="py-2.5 text-center px-1">6P</th>
-            </tr>
-          </thead>
-          <tbody id="win-rates-tbody">
-            ${sortedHands.map(h => {
-              const isSuited = h.type === "suited";
-              const isPocket = h.type === "pocket";
-              const textClass = isPocket ? "text-amber-400 font-extrabold" : (isSuited ? "text-neutral-100 font-semibold" : "text-neutral-300");
-
-              return `
-                <tr class="hand-row border-b border-neutral-950 hover:bg-neutral-900/40 transition-colors" data-hand="${h.hand}" data-type="${h.type}">
-                  <td class="py-2.5 px-3 text-left font-mono font-bold ${textClass}">
-                    <span>${h.hand}</span>
-                  </td>
-                  <td class="py-2.5 text-center px-1 font-mono font-bold text-neutral-300 bg-neutral-950/20">${h.probs[0]}%</td>
-                  <td class="py-2.5 text-center px-1 font-mono text-neutral-400">${h.probs[1]}%</td>
-                  <td class="py-2.5 text-center px-1 font-mono text-neutral-400">${h.probs[2]}%</td>
-                  <td class="py-2.5 text-center px-1 font-mono text-neutral-400">${h.probs[3]}%</td>
-                  <td class="py-2.5 text-center px-1 font-mono font-bold text-neutral-100 bg-[#0c0c0c]/40">${h.probs[4]}%</td>
-                </tr>
-              `;
-            }).join("")}
-          </tbody>
-        </table>
+      <!-- LEGEND / INFORMATION BAR -->
+      <div class="flex-shrink-0 mb-4 flex flex-wrap justify-center gap-x-4 gap-y-2 bg-neutral-900/30 p-2.5 rounded-lg border border-neutral-900 text-[9px] select-none font-mono text-center">
+        <div class="flex items-center gap-1.5">
+          <span class="w-3.5 h-3.5 rounded bg-amber-500/10 border border-amber-500/20 inline-block shrink-0"></span>
+          <span class="text-neutral-300 font-semibold">${state.lang === "ja" ? "対角線: ポケット" : "Diagonal: Pairs"}</span>
+        </div>
+        <div class="flex items-center gap-1.5">
+          <span class="w-3.5 h-3.5 rounded bg-neutral-900/30 border border-neutral-850/40 inline-block shrink-0"></span>
+          <span class="text-neutral-300 font-semibold">${state.lang === "ja" ? "右上: スーテッド" : "Upper-Right: Suited"}</span>
+        </div>
+        <div class="flex items-center gap-1.5">
+          <span class="w-3.5 h-3.5 rounded bg-neutral-900/15 border border-neutral-850/20 inline-block shrink-0"></span>
+          <span class="text-neutral-300 font-semibold">${state.lang === "ja" ? "左下: オフスーツ" : "Lower-Left: Offsuit"}</span>
+        </div>
+        <div class="flex items-center gap-1.5">
+          <span class="text-emerald-400 font-black text-xs shrink-0">●</span>
+          <span class="text-emerald-400 font-bold">${state.lang === "ja" ? "緑字: 各テーブルの上位30ハンド" : "Green: Top 30 Win Rates"}</span>
+        </div>
       </div>
-      <div class="text-[9px] text-neutral-600 font-mono text-center mt-3 select-none">
-        ${state.lang === "ja" ? "※AAの2P(85%)はデュエルの勝率を表します" : "*Scores indicate percentage likelihood of winning at showdown"}
+
+      <!-- PREFLOP WIN RATE GRIDS CONTAINER -->
+      <div class="flex-1 overflow-y-auto pr-1 min-h-0">
+        ${gridsHtml}
+      </div>
+
+      <div class="text-[9px] text-neutral-600 font-mono text-center mt-3 select-none flex-shrink-0">
+        ${state.lang === "ja" ? "※表示される勝率は、全員が最後までフォールドせずにショーダウンした場合の期待勝率です" : "*Scores indicate percentage likelihood of winning at showdown"}
       </div>
     </div>
   `;
@@ -1151,34 +1272,10 @@ window.toggleEcoMode = function(enabled) {
   renderApp();
 };
 
-window.handleWinRatesSearchInput = function(val) {
-  state.winRatesSearch = val.trim().toLowerCase();
-  filterWinRatesDOM();
-};
-
-window.handleWinRatesFilter = function(filterId) {
-  state.winRatesTypeFilter = filterId;
+window.handleWinRatesPlayerTab = function(playerCountVal) {
+  state.winRatesPlayersCount = playerCountVal;
   renderApp();
 };
-
-function filterWinRatesDOM() {
-  const query = state.winRatesSearch || "";
-  const filter = state.winRatesTypeFilter || "all";
-  const rows = document.querySelectorAll(".hand-row");
-  rows.forEach(row => {
-    const hand = (row.getAttribute("data-hand") || "").toLowerCase();
-    const type = row.getAttribute("data-type") || "all";
-    
-    const matchesQuery = hand.includes(query);
-    const matchesFilter = filter === "all" || type === filter;
-
-    if (matchesQuery && matchesFilter) {
-      row.style.setProperty("display", "table-row", "important");
-    } else {
-      row.style.setProperty("display", "none", "important");
-    }
-  });
-}
 
 /**
  * Get hand key for preflop data mapping
