@@ -100,17 +100,14 @@ body {
 /* Action bubbles from the design specs */
 .action-bubble-wpt {
   position: absolute;
-  top: -24px;
-  left: 50%;
-  transform: translateX(-50%);
-  padding: 2.5px 10px;
+  padding: 3px 8px;
   border-radius: 4px;
   font-weight: 800;
   text-transform: uppercase;
-  font-size: 10px;
+  font-size: 9px;
   white-space: nowrap;
   box-shadow: 0 3px 8px rgba(0, 0, 0, 0.7);
-  z-index: 20;
+  z-index: 30;
 }
 
 /* Sizing and incremental button grids */
@@ -226,3 +223,30 @@ body {
   from { opacity: 0; transform: scale(0.98); }
   to { opacity: 1; transform: scale(1); }
 }
+
+/* Eco Mode (Ultra Power Saving) overrides to prevent GPU composition & layout repaints */
+body.eco-mode *,
+body.eco-mode {
+  transition: none !important;
+  animation: none !important;
+  transform: none !important;
+  box-shadow: none !important;
+  text-shadow: none !important;
+}
+
+body.eco-mode .wpt-poker-table-outer {
+  background: #0c2016 !important; /* Flat dark green table felt instead of radial gradient */
+  border-color: #1a1a1a !important;
+  box-shadow: none !important;
+}
+
+body.eco-mode .active-turn-ring {
+  background-color: rgba(212, 175, 55, 0.1) !important;
+  border-width: 2px !important;
+  border-color: #d4af37 !important;
+}
+
+body.eco-mode .thinking-dot {
+  opacity: 0.8 !important;
+}
+

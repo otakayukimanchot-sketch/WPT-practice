@@ -17,11 +17,12 @@ const TRANSLATIONS = {
     normal: "ノーマル (普通)",
     hard: "ハード (上級)",
     pro: "プロ (手強い)",
-    handHistory: "ハンド履歴 (最大50件分)",
+    handHistory: "ハンド履歴 (最大1000件分)",
     noHistory: "履歴がありません。プレイを開始してください。",
     expectedWin: "想定プリフロップ勝率",
     actualResult: "結果",
     diffFromAvg: "期待値との差",
+    viewWinRates: "人数別勝率表を表示",
     win: "勝利 (Win)",
     lose: "敗北 (Lose)",
     handCount: "ハンド",
@@ -37,14 +38,16 @@ const TRANSLATIONS = {
     eliminated: "脱落",
     heroEliminated: "あなたは脱落しました",
     tournamentEnd: "トーナメント終了",
-    congrats: "優勝：Hero！",
+    congrats: "優勝：Player！",
     newGame: "ニューゲーム",
     rematch: "同じ人数で再戦",
     mainMenu: "メインメニュー",
     champion: "チャンピオン",
     rank: "順位",
     confirmNewGame: "新しくゲームを始めますか？履歴は保持されます。",
-    blindUp: "ブラインド上昇！"
+    blindUp: "ブラインド上昇！",
+    ecoMode: "超省電力 (バッテリー節約)",
+    ecoDesc: "アニメーションと陰影効果を無効化し、バッテリー消費量と負荷を極限まで低減します"
   },
   en: {
     start: "Start Game",
@@ -58,11 +61,12 @@ const TRANSLATIONS = {
     normal: "Normal",
     hard: "Hard",
     pro: "Pro",
-    handHistory: "Hand History (Last 50 hands)",
+    handHistory: "Hand History (Last 1000 hands)",
     noHistory: "No history found. Start playing to log results.",
     expectedWin: "Expected Preflop Win",
     actualResult: "Result",
     diffFromAvg: "Difference",
+    viewWinRates: "View Win Rates by Number of Players",
     win: "Win",
     lose: "Lose",
     handCount: "Hand",
@@ -78,14 +82,16 @@ const TRANSLATIONS = {
     eliminated: "Eliminated",
     heroEliminated: "You have been eliminated.",
     tournamentEnd: "Tournament End",
-    congrats: "Champion: Hero!",
+    congrats: "Champion: Player!",
     newGame: "New Game",
     rematch: "Rematch",
     mainMenu: "Main Menu",
     champion: "Champion",
     rank: "Rank",
     confirmNewGame: "Start a new game? History will be kept.",
-    blindUp: "Blinds Raised!"
+    blindUp: "Blinds Raised!",
+    ecoMode: "Ultra Eco (Battery Saver)",
+    ecoDesc: "Disables all animations & shading effects to achieve ultra-low power consumption"
   }
 };
 
@@ -103,23 +109,38 @@ PF_RAW.split(";").forEach(item => {
 const SUIT_SYMBOL = { S: "♠", H: "♥", D: "♦", C: "♣" };
 const SUIT_CLASS = { S: "suit-spade", H: "suit-heart", D: "suit-diamond", C: "suit-club" };
 
+/**
+ * Retrieve country flag image from CDN, or fallback to text if user-defined or non-standard
+ */
+function getFlagHtml(flag, forClass = "w-4.5 h-3") {
+  const FLAG_MAP = {
+    "🇺🇸": "https://flagcdn.com/w40/us.png",
+    "🇩🇰": "https://flagcdn.com/w40/dk.png",
+    "🇪🇸": "https://flagcdn.com/w40/es.png",
+    "🇨🇦": "https://flagcdn.com/w40/ca.png",
+  };
+  if (FLAG_MAP[flag]) {
+    return `<img src="${FLAG_MAP[flag]}" class="${forClass} object-cover rounded shadow-xs shrink-0 inline-block align-middle" alt="flag" referrerPolicy="no-referrer" />`;
+  }
+  return `<span class="inline-block align-middle">${flag || "👤"}</span>`;
+}
+
 // CPU Natural Names pool
 const CPU_NAME_POOL = [
-  { name: "Yuki", flag: "🇯🇵" },
-  { name: "Sora", flag: "🇯🇵" },
-  { name: "Alex", flag: "🇺🇸" },
-  { name: "John", flag: "🇺🇸" },
-  { name: "Lucas", flag: "🇫🇷" },
-  { name: "Emma", flag: "🇫🇷" },
-  { name: "Han", flag: "🇰🇷" },
-  { name: "Min-ji", flag: "🇰🇷" },
-  { name: "Oliver", flag: "🇬🇧" },
-  { name: "Sophie", flag: "🇬🇧" },
-  { name: "Maximilian", flag: "🇩🇪" },
-  { name: "Anna", flag: "🇩🇪" },
-  { name: "Mateo", flag: "🇪🇸" },
-  { name: "Wang", flag: "🇨🇳" },
-  { name: "Li", flag: "🇨🇳" }
+  { name: "Darren Elias", flag: "🇺🇸" },
+  { name: "Gus Hansen", flag: "🇩🇰" },
+  { name: "Carlos Mortensen", flag: "🇪🇸" },
+  { name: "Anthony Zinno", flag: "🇺🇸" },
+  { name: "Brian Altman", flag: "🇺🇸" },
+  { name: "David Rheem", flag: "🇺🇸" },
+  { name: "Daniel Negreanu", flag: "🇨🇦" },
+  { name: "Erick Lindgren", flag: "🇺🇸" },
+  { name: "Howard Lederer", flag: "🇺🇸" },
+  { name: "Michael Mizrachi", flag: "🇺🇸" },
+  { name: "J. C. Tran", flag: "🇺🇸" },
+  { name: "Jonathan Little", flag: "🇺🇸" },
+  { name: "Matt Waxman", flag: "🇨🇦" },
+  { name: "David Williams", flag: "🇺🇸" }
 ];
 
 // Local state
@@ -127,7 +148,12 @@ let state = {
   currentScreen: "title", // title, settings, history, playerCountSelect, game
   lang: localStorage.getItem("wpt_lang") === "en" ? "en" : "ja",
   difficulty: localStorage.getItem("wpt_diff") || "normal", // beginner, normal, hard, pro
+  ecoMode: localStorage.getItem("wpt_eco_mode") === "true",
   playerCount: 6,
+  showShareOverlay: false,
+  showWinRatesOverlay: false,
+  winRatesSearch: "",
+  winRatesTypeFilter: "all", // all, pockets, suited, offsuit
   
   // Active Tournament
   tour: {
@@ -189,15 +215,65 @@ function renderApp() {
   }
 
   mount.innerHTML = html;
+  if (state.ecoMode) {
+    document.body.classList.add("eco-mode");
+    mount.classList.add("eco-mode");
+  } else {
+    document.body.classList.remove("eco-mode");
+    mount.classList.remove("eco-mode");
+  }
   bindEvents();
+
+  if (state.showWinRatesOverlay) {
+    filterWinRatesDOM();
+  }
 }
 
 /**
  * TITLE SCREEN
  */
 function createTitleScreenHtml() {
+  const currentUrl = window.location.href;
+  const qrCodeUrl = `./src/assets/images/square_qr_code_1780499703406.png`;
+
+  let shareOverlayHtml = "";
+  if (state.showShareOverlay) {
+    shareOverlayHtml = `
+      <div class="absolute inset-0 bg-black/85 backdrop-blur-md flex flex-col justify-center items-center p-6 z-50 animate-fade-in">
+        <div class="bg-[#0f0f0f] border border-amber-500/30 rounded-2xl p-6 w-full max-w-xs text-center shadow-[0_0_30px_rgba(245,158,11,0.15)] relative">
+          <!-- Close Button -->
+          <button id="btn-close-share" class="absolute top-3 right-3 text-neutral-400 hover:text-white transition-colors p-1" title="Close">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-x"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+          
+          <div class="text-xs tracking-wider text-amber-500 font-extrabold uppercase mb-1">SCAN TO PLAY</div>
+          <div class="text-[10px] text-neutral-400 mb-4 font-mono">Share this tournament with friends</div>
+          
+          <!-- QR Code Container -->
+          <div class="bg-white p-3 rounded-xl inline-block shadow-lg mb-4">
+            <img src="${qrCodeUrl}" alt="App QR Code" class="w-40 h-40 aspect-square object-contain mx-auto" referrerPolicy="no-referrer" />
+          </div>
+          
+          <!-- Copy Link Section -->
+          <div class="flex items-center gap-1.5 bg-neutral-950/80 border border-neutral-800 rounded-lg p-1.5 pl-2.5 mb-1 text-left">
+            <input type="text" readonly value="${currentUrl}" id="share-url-input" class="bg-transparent text-[10px] font-mono text-neutral-300 flex-1 outline-none pointer-events-auto select-all" />
+            <button id="btn-copy-url" class="bg-amber-500 hover:bg-amber-400 text-neutral-950 text-[9px] font-extrabold px-2.5 py-1 rounded transition-colors select-none">
+              COPY
+            </button>
+          </div>
+          <span id="copy-status" class="text-[9px] text-emerald-400 font-bold opacity-0 transition-opacity">Copied successfully!</span>
+        </div>
+      </div>
+    `;
+  }
+
   return `
-    <div class="flex-1 flex flex-col justify-between p-6 fade-in">
+    <div class="flex-1 flex flex-col justify-between p-6 relative fade-in">
+      <!-- Share Button -->
+      <button id="btn-share" class="absolute top-4 right-4 bg-neutral-900/60 hover:bg-neutral-800 border border-neutral-800 rounded-full w-9 h-9 flex items-center justify-center transition-all duration-150 shadow-lg text-amber-500 hover:text-amber-400 z-10 animate-fade-in" title="Share App">
+        <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-share-2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+      </button>
+
       <div class="flex-1 flex flex-col justify-center items-center text-center">
         <!-- WPT TV Show Inspired Elegant Logo Stack -->
         <div class="relative mb-2">
@@ -222,9 +298,13 @@ function createTitleScreenHtml() {
         </button>
       </div>
 
-      <div class="text-center text-[10px] text-neutral-600 font-mono">
-        PORTABLE FLOP WORKOUT ENGINE
+      <div class="text-center text-[10px] text-neutral-600 font-mono flex flex-col items-center justify-center gap-1">
+        <div>PORTABLE FLOP WORKOUT ENGINE</div>
+        ${state.ecoMode ? `<div class="text-emerald-500 font-bold bg-emerald-950/40 px-2 py-0.5 mt-0.5 rounded border border-emerald-900/30 text-[9px] tracking-wider select-none">🌱 ${t("ecoMode")} ON</div>` : ""}
       </div>
+
+      <!-- share overlay dialog -->
+      ${shareOverlayHtml}
     </div>
   `;
 }
@@ -275,6 +355,26 @@ function createSettingsScreenHtml() {
             }).join("")}
           </div>
         </div>
+
+        <!-- Eco Mode Option -->
+        <div class="mt-6">
+          <label class="block text-xs text-neutral-400 font-semibold uppercase tracking-wider mb-2.5 font-mono flex items-center gap-1.5">
+            <span>🌱 ${t("ecoMode")}</span>
+          </label>
+          <div class="grid grid-cols-2 gap-3">
+            <button class="py-2.5 px-4 text-xs font-semibold rounded-lg border text-left flex justify-between items-center ${state.ecoMode ? "border-emerald-500 text-emerald-400 bg-emerald-500/10" : "border-neutral-800 text-neutral-400"}" onclick="toggleEcoMode(true)">
+              <span>ON (省電力)</span>
+              ${state.ecoMode ? `<span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>` : ""}
+            </button>
+            <button class="py-2.5 px-4 text-xs font-semibold rounded-lg border text-left flex justify-between items-center ${!state.ecoMode ? "border-neutral-700 text-neutral-200 bg-neutral-900" : "border-neutral-800 text-neutral-400"}" onclick="toggleEcoMode(false)">
+              <span>OFF (通常)</span>
+              ${!state.ecoMode ? `<span class="w-1.5 h-1.5 rounded-full bg-neutral-500"></span>` : ""}
+            </button>
+          </div>
+          <div class="text-[10px] text-neutral-500 mt-2.5 leading-relaxed font-sans">
+            ${t("ecoDesc")}
+          </div>
+        </div>
       </div>
 
       <div class="text-[10px] text-neutral-600 font-mono text-center">
@@ -303,7 +403,6 @@ function createHistoryScreenHtml() {
           <div class="text-neutral-500 text-xs text-center py-12">${t("noHistory")}</div>
         ` : history.map((h, i) => {
           const isWin = h.result === "Win";
-          const delta = isWin ? 100 - h.expectedRate : -h.expectedRate;
           return `
             <div class="p-3 bg-neutral-900/60 rounded-lg border border-neutral-900/80 flex items-center justify-between">
               <div>
@@ -319,9 +418,6 @@ function createHistoryScreenHtml() {
                 <span class="text-xs font-semibold px-2 py-0.5 rounded ${isWin ? "bg-emerald-950/40 text-emerald-400 border border-emerald-900/40" : "bg-neutral-950/60 text-neutral-500 border border-neutral-900"}">
                   ${isWin ? t("win") : t("lose")}
                 </span>
-                <div class="text-[9px] text-neutral-500 mt-1 font-mono">
-                  ${t("diffFromAvg")}: <span class="${delta >= 0 ? "text-emerald-500" : "text-rose-500"}">${delta >= 0 ? "+" : ""}${delta}%</span>
-                </div>
               </div>
             </div>
           `;
@@ -332,11 +428,120 @@ function createHistoryScreenHtml() {
 }
 
 /**
+ * WIN RATES TABLE OVERLAY
+ */
+function createWinRatesOverlayHtml() {
+  if (!state.showWinRatesOverlay) return "";
+
+  // Sort hands by 2-player win rate descending (indicating overall preflop raw strength)
+  const sortedHands = Object.entries(PF_PROBS).map(([hand, probs]) => {
+    let type = "offsuit";
+    if (hand.length === 2 && hand[0] === hand[1]) type = "pocket";
+    else if (hand.endsWith("s")) type = "suited";
+    return { hand, probs, type };
+  }).sort((a, b) => b.probs[0] - a.probs[0]);
+
+  const searchPlaceholderText = state.lang === "ja" ? "ハンドを検索 (例: AA, AKs, 72o)" : "Search Hand (e.g. AA, AKs, 72o)";
+
+  return `
+    <div id="win-rates-overlay" class="absolute inset-0 bg-neutral-950 flex flex-col p-6 z-50 animate-fade-in">
+      <!-- HEADER -->
+      <div class="flex items-center justify-between mb-4 pb-3 border-b border-neutral-900 flex-shrink-0">
+        <div>
+          <h2 class="text-sm font-black tracking-wider text-amber-500 uppercase font-display">${state.lang === "ja" ? "人数別プリフロップ勝率一覧" : "Preflop Win Rates by Player Count"}</h2>
+          <p class="text-[9px] text-neutral-500 font-mono mt-0.5">${state.lang === "ja" ? "2人〜6人のスターティングハンド勝率" : "Preflop win probabilities for 2 to 6 players"}</p>
+        </div>
+        <button id="btn-close-win-rates" class="text-xs text-neutral-400 font-medium bg-neutral-900 hover:bg-neutral-850 py-1.5 px-3 rounded-md hover:text-white transition-colors">
+          ${t("back")}
+        </button>
+      </div>
+
+      <!-- SEARCH & FILTERS -->
+      <div class="flex-shrink-0 space-y-3 mb-4">
+        <!-- Searchbox -->
+        <div class="relative">
+          <input 
+            type="text" 
+            id="win-rates-search" 
+            placeholder="${searchPlaceholderText}" 
+            value="${state.winRatesSearch}"
+            class="w-full bg-neutral-900 border border-neutral-800 rounded-lg py-2.5 px-3.5 pl-9 text-xs text-neutral-200 outline-none focus:border-amber-500/50 transition-colors placeholder:text-neutral-600 font-mono"
+            oninput="handleWinRatesSearchInput(this.value)"
+          />
+          <svg class="absolute left-3 top-3 text-neutral-600" xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        </div>
+
+        <!-- Filter tabs -->
+        <div class="flex gap-1.5 bg-neutral-900/50 p-1 rounded-lg border border-neutral-900">
+          ${[
+            { id: "all", ja: "全ハンド", en: "All" },
+            { id: "pocket", ja: "ペア", en: "Pairs" },
+            { id: "suited", ja: "同マーク", en: "Suited" },
+            { id: "offsuit", ja: "別マーク", en: "Offsuit" }
+          ].map(tab => {
+            const label = state.lang === "ja" ? tab.ja : tab.en;
+            const active = state.winRatesTypeFilter === tab.id;
+            return `
+              <button 
+                class="flex-1 text-[10px] py-1.5 px-1 rounded-md text-center font-bold font-sans transition-colors ${active ? "bg-amber-500 text-neutral-950" : "text-neutral-400 hover:text-neutral-200"}"
+                onclick="handleWinRatesFilter('${tab.id}')"
+              >
+                ${label}
+              </button>
+            `;
+          }).join("")}
+        </div>
+      </div>
+
+      <!-- WIN RATES TABLE -->
+      <div class="flex-1 overflow-y-auto overflow-x-hidden border border-neutral-900 rounded-lg bg-[#070707] min-h-0 select-text">
+        <table class="w-full text-[11px] border-collapse">
+          <thead class="sticky top-0 bg-neutral-900 text-neutral-400 font-mono tracking-tight text-[9px] font-bold uppercase select-none z-10 border-b border-neutral-800">
+            <tr>
+              <th class="py-2.5 px-3 text-left font-display font-black text-amber-500">${state.lang === "ja" ? "ハンド" : "Hand"}</th>
+              <th class="py-2.5 text-center px-1">2P</th>
+              <th class="py-2.5 text-center px-1">3P</th>
+              <th class="py-2.5 text-center px-1">4P</th>
+              <th class="py-2.5 text-center px-1">5P</th>
+              <th class="py-2.5 text-center px-1">6P</th>
+            </tr>
+          </thead>
+          <tbody id="win-rates-tbody">
+            ${sortedHands.map(h => {
+              const isSuited = h.type === "suited";
+              const isPocket = h.type === "pocket";
+              const textClass = isPocket ? "text-amber-400 font-extrabold" : (isSuited ? "text-neutral-100 font-semibold" : "text-neutral-300");
+
+              return `
+                <tr class="hand-row border-b border-neutral-950 hover:bg-neutral-900/40 transition-colors" data-hand="${h.hand}" data-type="${h.type}">
+                  <td class="py-2.5 px-3 text-left font-mono font-bold ${textClass}">
+                    <span>${h.hand}</span>
+                  </td>
+                  <td class="py-2.5 text-center px-1 font-mono font-bold text-neutral-300 bg-neutral-950/20">${h.probs[0]}%</td>
+                  <td class="py-2.5 text-center px-1 font-mono text-neutral-400">${h.probs[1]}%</td>
+                  <td class="py-2.5 text-center px-1 font-mono text-neutral-400">${h.probs[2]}%</td>
+                  <td class="py-2.5 text-center px-1 font-mono text-neutral-400">${h.probs[3]}%</td>
+                  <td class="py-2.5 text-center px-1 font-mono font-bold text-neutral-100 bg-[#0c0c0c]/40">${h.probs[4]}%</td>
+                </tr>
+              `;
+            }).join("")}
+          </tbody>
+        </table>
+      </div>
+      <div class="text-[9px] text-neutral-600 font-mono text-center mt-3 select-none">
+        ${state.lang === "ja" ? "※AAの2P(85%)はデュエルの勝率を表します" : "*Scores indicate percentage likelihood of winning at showdown"}
+      </div>
+    </div>
+  `;
+}
+
+/**
  * PLAYER COUNT SELECT SCREEN
  */
 function createPlayerCountScreenHtml() {
+  const winRatesOverlayHtml = createWinRatesOverlayHtml();
   return `
-    <div class="flex-1 flex flex-col justify-between p-6 fade-in">
+    <div class="flex-1 flex flex-col justify-between p-6 fade-in relative">
       <div>
         <div class="flex items-center justify-between mb-8 pb-3 border-b border-neutral-900">
           <h2 class="text-lg font-bold font-display text-neutral-200">${t("start")}</h2>
@@ -347,7 +552,7 @@ function createPlayerCountScreenHtml() {
 
         <p class="text-xs text-neutral-400 mb-6 font-medium">${t("selectPlayersCount")}</p>
 
-        <div class="grid grid-cols-2 gap-3.5">
+        <div class="grid grid-cols-2 gap-3.5 mb-6">
           ${[2, 3, 4, 5, 6].map(count => {
             return `
               <button class="py-4 px-4 bg-neutral-900 border border-neutral-800 rounded-lg font-display font-semibold hover:border-amber-500/50 hover:text-amber-500 text-neutral-200 transition-colors" onclick="startTournamentWith(${count})">
@@ -357,11 +562,20 @@ function createPlayerCountScreenHtml() {
             `;
           }).join("")}
         </div>
+
+        <!-- VIEW WIN RATES BY NUMBER OF PLAYERS BUTTON -->
+        <button id="btn-view-win-rates" class="w-full py-3.5 px-4 bg-neutral-900 border border-neutral-850 hover:border-amber-500/30 text-amber-500 hover:text-amber-400 font-bold rounded-lg text-xs tracking-wider transition-colors uppercase font-mono flex items-center justify-center gap-2">
+          <svg class="lucide lucide-bar-chart-2" xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+          ${t("viewWinRates")}
+        </button>
       </div>
 
       <div class="text-[10px] text-neutral-600 font-mono text-center">
         WPT STANDARD BRACKET SPEEDRUN
       </div>
+
+      <!-- overlay dialog -->
+      ${winRatesOverlayHtml}
     </div>
   `;
 }
@@ -385,6 +599,7 @@ function createGameScreenHtml() {
         <div class="flex items-center gap-2">
           <span>WPT WORLD TOUR</span>
           <span class="text-neutral-500 font-mono font-medium">H-${tour.handCount}</span>
+          ${state.ecoMode ? `<span class="text-emerald-500 text-[8px] bg-emerald-950/40 px-1 rounded-sm border border-emerald-900/40 font-black leading-none py-0.5">ECO</span>` : ""}
         </div>
         <div class="flex items-center gap-3">
           <div class="text-amber-500">LEVEL ${Math.floor(tour.handCount / 5) + 1}: ${tour.sbSize} / ${tour.bbSize}</div>
@@ -401,20 +616,41 @@ function createGameScreenHtml() {
           <div class="absolute inset-[24px] border border-neutral-900/10 rounded-[90px] pointer-events-none"></div>
 
           <!-- POT / CHIPS AREA -->
-          <div id="table-pot-wrapper" class="absolute top-[28%] text-center z-10">
-            <div class="text-[9px] tracking-widest text-neutral-500 font-bold uppercase">${t("pot")}</div>
-            <div id="pot-amount" class="text-xl font-bold font-mono text-white tracking-tight">$${displayPot}</div>
-          </div>
+          ${(() => {
+            if (tour.handWinners && tour.handWinners.length > 0 && tour.stage === "RESULT") {
+              const winnerNames = tour.handWinners.map(w => `<span class="inline-flex items-center gap-1">${getFlagHtml(w.flag, "w-4 h-2.5")} <span>${w.isHero ? "Player" : w.name}</span></span>`).join(" & ");
+              const wonAmt = tour.handWinners.reduce((sum, w) => sum + w.wonAmount, 0);
+              const handName = tour.handWinners[0].handName;
+              return `
+                <div id="table-winner-display" class="absolute inset-x-8 top-[15%] flex flex-col items-center justify-center text-center z-12 bg-black/90 border border-amber-500/50 p-2 px-3 rounded-xl shadow-[0_0_20px_rgba(245,158,11,0.25)] animate-fade-in pointer-events-auto">
+                  <div class="text-[8px] tracking-widest text-amber-500 font-extrabold uppercase flex items-center gap-1 justify-center">
+                    <span>🏆</span>
+                    <span>${state.lang === "ja" ? "勝者" : "WINNER"}</span>
+                  </div>
+                  <div class="text-xs font-black text-white mt-0.5 truncate max-w-full inline-flex flex-wrap items-center justify-center gap-1.5">${winnerNames}</div>
+                  <div class="text-sm font-bold text-emerald-400 mt-0.5 font-mono">+$${wonAmt}</div>
+                  <div class="text-[9px] text-amber-300 font-medium bg-neutral-900/60 px-1.5 py-0.5 rounded border border-amber-950 mt-1">${handName}</div>
+                </div>
+              `;
+            } else {
+              return `
+                <div id="table-pot-wrapper" class="absolute top-[28%] text-center z-10">
+                  <div class="text-[9px] tracking-widest text-neutral-500 font-bold uppercase">${t("pot")}</div>
+                  <div id="pot-amount" class="text-xl font-bold font-mono text-white tracking-tight">$${displayPot}</div>
+                </div>
+              `;
+            }
+          })()}
 
           <!-- COMMUNITY CARDS BAR -->
           <div id="community-area" class="absolute top-[52%] flex items-center justify-center gap-1.5 z-10 w-full px-8">
             ${createCommunityCardsHtml()}
           </div>
-        </div>
 
-        <!-- 6 SEATS PLACEMENT -->
-        <div id="poker-seats-wrapper" class="absolute inset-0 pointer-events-none">
-          ${createSeatsHtml()}
+          <!-- 6 SEATS PLACEMENT INSIDE FELT -->
+          <div id="poker-seats-wrapper" class="absolute inset-0 pointer-events-none w-full h-full">
+            ${createSeatsHtml()}
+          </div>
         </div>
       </div>
 
@@ -459,17 +695,57 @@ function createCommunityCardsHtml() {
 }
 
 /**
+ * Render player pocket cards directly on their outer felt seats
+ */
+function renderSeatHoleCards(p) {
+  const tour = state.tour;
+  if (!p.cards || p.cards.length !== 2 || p.isFolded) {
+    return `<div class="h-[28px] mb-1"></div>`; // spacer to maintain structure
+  }
+
+  // Show cards face up if stage is SHOWDOWN or RESULT, or if they are the Hero
+  const showFaceUp = tour.stage === "SHOWDOWN" || tour.stage === "RESULT" || p.isHero;
+
+  if (showFaceUp) {
+    const c1 = p.cards[0];
+    const c2 = p.cards[1];
+    return `
+      <div class="flex gap-0.5 mb-1 justify-center select-none animate-fade-in z-20">
+        <!-- Card 1 -->
+        <div class="w-[20px] h-[28px] bg-white rounded border border-neutral-300 text-black flex flex-col items-center justify-center font-bold shadow-sm">
+          <div class="text-[8px] font-extrabold leading-none tracking-tighter">${c1.rankLabel}</div>
+          <div class="${SUIT_CLASS[c1.suit]} text-[11px] leading-none -mt-0.5">${SUIT_SYMBOL[c1.suit]}</div>
+        </div>
+        <!-- Card 2 -->
+        <div class="w-[20px] h-[28px] bg-white rounded border border-neutral-300 text-black flex flex-col items-center justify-center font-bold shadow-sm">
+          <div class="text-[8px] font-extrabold leading-none tracking-tighter">${c2.rankLabel}</div>
+          <div class="${SUIT_CLASS[c2.suit]} text-[11px] leading-none -mt-0.5">${SUIT_SYMBOL[c2.suit]}</div>
+        </div>
+      </div>
+    `;
+  } else {
+    // Face down cards for standard streets
+    return `
+      <div class="flex gap-0.5 mb-1 justify-center select-none opacity-85 animate-fade-in z-20">
+        <div class="w-[20px] h-[28px] bg-gradient-to-b from-blue-700 to-blue-900 rounded border border-blue-400/50 shadow-sm flex items-center justify-center text-[7px] font-black text-blue-100 uppercase tracking-tighter select-none">W</div>
+        <div class="w-[20px] h-[28px] bg-gradient-to-b from-blue-700 to-blue-900 rounded border border-blue-400/50 shadow-sm flex items-center justify-center text-[7px] font-black text-blue-100 uppercase tracking-tighter select-none">W</div>
+      </div>
+    `;
+  }
+}
+
+/**
  * Render player positions
  */
 function createSeatsHtml() {
   const tour = state.tour;
   const positions = [
-    { bottom: "3%", left: "50%", transform: "translateX(-50%)" }, // Seat 0 (Bottom, Hero)
-    { bottom: "27%", left: "1.5%", transform: "none" },          // Seat 1 (Left Lower)
-    { top: "27%", left: "1.5%", transform: "none" },             // Seat 2 (Left Higher)
-    { top: "3%", left: "50%", transform: "translateX(-50%)" },   // Seat 3 (Top Central)
-    { top: "27%", right: "1.5%", transform: "none" },            // Seat 4 (Right Higher)
-    { bottom: "27%", right: "1.5%", transform: "none" }          // Seat 5 (Right Lower)
+    { bottom: "-12px", left: "50%", transform: "translateX(-50%)" }, // Seat 0 (Bottom, Hero)
+    { bottom: "35px", left: "4px", transform: "none" },            // Seat 1 (Left Lower)
+    { top: "35px", left: "4px", transform: "none" },               // Seat 2 (Left Higher)
+    { top: "-12px", left: "50%", transform: "translateX(-50%)" },   // Seat 3 (Top Central)
+    { top: "35px", right: "4px", transform: "none" },              // Seat 4 (Right Higher)
+    { bottom: "35px", right: "4px", transform: "none" }            // Seat 5 (Right Lower)
   ];
 
   let html = "";
@@ -488,21 +764,30 @@ function createSeatsHtml() {
     const hasBB = tour.bbIdx === p.id;
 
     let btnBadge = "";
-    if (hasD) btnBadge = `<div class="absolute -left-3.5 top-3.5 bg-white text-black text-[9px] rounded-full w-5 h-5 flex items-center justify-center font-black border border-black shadow-lg select-none z-10">D</div>`;
-    else if (hasSB) btnBadge = `<div class="absolute -left-3.5 top-3.5 bg-gray-600 text-white text-[9px] rounded-full w-5 h-5 flex items-center justify-center font-black shadow-lg select-none z-10">SB</div>`;
-    else if (hasBB) btnBadge = `<div class="absolute -left-3.5 top-3.5 bg-gray-800 text-white text-[9px] rounded-full w-5 h-5 flex items-center justify-center font-black shadow-lg select-none z-10">BB</div>`;
+    if (hasD) btnBadge = `<div class="absolute -top-1.5 -right-1.5 bg-white text-black text-[9px] rounded-full w-4 h-4 flex items-center justify-center font-black border border-black shadow-lg select-none z-10">D</div>`;
+    else if (hasSB) btnBadge = `<div class="absolute -top-1.5 -right-1.5 bg-gray-600 text-white text-[9px] rounded-full w-4 h-4 flex items-center justify-center font-black shadow-lg select-none z-10">SB</div>`;
+    else if (hasBB) btnBadge = `<div class="absolute -top-1.5 -right-1.5 bg-gray-800 text-white text-[9px] rounded-full w-4 h-4 flex items-center justify-center font-black shadow-lg select-none z-10">BB</div>`;
+
+    // Upper half seats [2, 3, 4] get bubble below; lower half [0, 1, 5] get bubble above
+    const isUpper = [2, 3, 4].includes(p.seatIndex);
+    const bubblePosClass = isUpper ? "bottom-[-20px] left-1/2 -translate-x-1/2" : "top-[-20px] left-1/2 -translate-x-1/2";
 
     html += `
-      <div class="absolute flex flex-col items-center pointer-events-auto" style="bottom:${pos.bottom || 'auto'}; top:${pos.top || 'auto'}; left:${pos.left || 'auto'}; right:${pos.right || 'auto'}; transform:${pos.transform || 'none'};">
+      <div class="absolute flex flex-col items-center pointer-events-auto animate-fade-in" style="bottom:${pos.bottom || 'auto'}; top:${pos.top || 'auto'}; left:${pos.left || 'auto'}; right:${pos.right || 'auto'}; transform:${pos.transform || 'none'};">
         <!-- ACTION BUBBLE -->
-        <div class="${actionColorClass} ${p.actionText ? "opacity-100 scale-100" : "opacity-0 scale-90 pointer-events-none transition-all duration-150"}">
+        <div class="${actionColorClass} ${bubblePosClass} ${p.actionText ? "opacity-100 scale-100" : "opacity-0 scale-90 pointer-events-none transition-all duration-150"}">
           ${p.actionText || ""}
         </div>
 
+        <!-- HOLE CARDS -->
+        ${renderSeatHoleCards(p)}
+
         <!-- PLAYER BADGE -->
-        <div class="relative w-20 bg-black/90 border ${isCurrentTurn ? "active-turn-ring border-amber-500 scale-102" : "border-[#222]"} rounded-lg p-1.5 flex flex-col items-center justify-center text-center shadow-lg transition-all z-10">
-          <div class="text-xs shrink-0 select-none">${p.flag}</div>
-          <div class="text-[10px] truncate max-w-full font-bold font-display ${p.isHero ? "text-amber-400" : "text-neutral-200"} mt-0.5">${p.isHero ? "Hero" : p.name}</div>
+        <div class="relative w-20 bg-black/90 border ${isCurrentTurn ? "active-turn-ring border-amber-500 scale-102" : "border-[#222]"} rounded-lg p-1.5 flex flex-col items-center justify-center text-center shadow-lg transition-all z-10 animate-fade-in">
+          <div class="flex items-center gap-1 w-full justify-center max-w-full">
+            <span class="inline-flex shrink-0 select-none">${getFlagHtml(p.flag)}</span>
+            <span class="text-[9px] truncate font-extrabold max-w-[48px] ${p.isHero ? "text-amber-400" : "text-neutral-200"}">${p.isHero ? "Player" : p.name}</span>
+          </div>
           <div class="text-[9px] font-mono text-neutral-400 font-bold mt-0.5">$${p.stack}</div>
           
           <!-- Bet display -->
@@ -679,8 +964,42 @@ function createActionsControlHtml() {
     </div>
   `;
 
+  let winnerBannerHtml = "";
+  if (tour.handWinners && tour.handWinners.length > 0 && (tour.stage === "RESULT" || tour.stage === "SHOWDOWN")) {
+    const listHtml = tour.handWinners.map(w => {
+      const isHero = w.isHero;
+      const highlightCls = isHero ? "text-amber-400 font-extrabold" : "text-neutral-200 font-extrabold";
+      
+      return `
+        <div class="flex items-center gap-2 text-xs sm:text-sm py-1 bg-neutral-900/60 px-3 rounded-lg border border-[#222]">
+          <span class="inline-flex shrink-0 select-none items-center">${getFlagHtml(w.flag, "w-4 h-2.5")}</span>
+          <span class="${highlightCls}">${w.name}</span>
+          <span class="text-neutral-400 text-[11px] sm:text-xs">
+            ${state.lang === "ja" 
+              ? `<span class="text-amber-500 font-bold">${w.handName}</span> で <span class="text-emerald-400 font-bold font-mono">+$${w.wonAmount}</span> 獲得！` 
+              : `won <span class="text-emerald-400 font-bold font-mono">+$${w.wonAmount}</span> with <span class="text-amber-500 font-bold">${w.handName}</span>!`
+            }
+          </span>
+        </div>
+      `;
+    }).join("");
+
+    winnerBannerHtml = `
+      <div id="wpt-winner-board-overlay" class="mb-1 p-3 bg-gradient-to-r from-amber-950/20 via-black to-amber-950/20 border border-amber-500/40 rounded-xl flex flex-col gap-1.5 shadow-2xl">
+        <div class="flex items-center gap-1.5 text-amber-500 font-black text-[9px] tracking-wider uppercase">
+          <span class="text-xs">🏆</span>
+          <span>${state.lang === "ja" ? "勝負決着 / ハンド結果" : "HAND CONCLUDED / RESULT"}</span>
+        </div>
+        <div class="flex flex-col gap-1 mt-0.5">
+          ${listHtml}
+        </div>
+      </div>
+    `;
+  }
+
   return `
     <div class="bg-[#0a0a0a] p-4 border border-[#222] rounded-2xl flex flex-col gap-4">
+      ${winnerBannerHtml}
       <div class="flex justify-between items-end select-none">
         <div class="flex gap-2">
           ${heroHoldemDeckHtml}
@@ -718,6 +1037,40 @@ function bindEvents() {
     renderApp();
   });
 
+  // Share system bindings
+  const btnShare = document.getElementById("btn-share");
+  if (btnShare) btnShare.addEventListener("click", () => {
+    state.showShareOverlay = true;
+    renderApp();
+  });
+
+  const btnCloseShare = document.getElementById("btn-close-share");
+  if (btnCloseShare) btnCloseShare.addEventListener("click", () => {
+    state.showShareOverlay = false;
+    renderApp();
+  });
+
+  const btnCopyUrl = document.getElementById("btn-copy-url");
+  if (btnCopyUrl) btnCopyUrl.addEventListener("click", () => {
+    const input = document.getElementById("share-url-input");
+    if (input) {
+      input.select();
+      navigator.clipboard.writeText(input.value).then(() => {
+        const status = document.getElementById("copy-status");
+        if (status) {
+          status.classList.remove("opacity-0");
+          status.classList.add("opacity-100");
+          setTimeout(() => {
+            status.classList.remove("opacity-100");
+            status.classList.add("opacity-0");
+          }, 2000);
+        }
+      }).catch(err => {
+        console.error("Could not copy:", err);
+      });
+    }
+  });
+
   // Settings screen
   const btnSettingsBack = document.getElementById("btn-settings-back");
   if (btnSettingsBack) btnSettingsBack.addEventListener("click", () => {
@@ -736,6 +1089,19 @@ function bindEvents() {
   const btnCountBack = document.getElementById("btn-count-back");
   if (btnCountBack) btnCountBack.addEventListener("click", () => {
     state.currentScreen = "title";
+    renderApp();
+  });
+
+  // Win Rates Screen Overlay Buttons
+  const btnViewWinRates = document.getElementById("btn-view-win-rates");
+  if (btnViewWinRates) btnViewWinRates.addEventListener("click", () => {
+    state.showWinRatesOverlay = true;
+    renderApp();
+  });
+
+  const btnCloseWinRates = document.getElementById("btn-close-win-rates");
+  if (btnCloseWinRates) btnCloseWinRates.addEventListener("click", () => {
+    state.showWinRatesOverlay = false;
     renderApp();
   });
 
@@ -778,6 +1144,41 @@ window.changeDifficulty = function(diff) {
   localStorage.setItem("wpt_diff", diff);
   renderApp();
 };
+
+window.toggleEcoMode = function(enabled) {
+  state.ecoMode = enabled;
+  localStorage.setItem("wpt_eco_mode", enabled ? "true" : "false");
+  renderApp();
+};
+
+window.handleWinRatesSearchInput = function(val) {
+  state.winRatesSearch = val.trim().toLowerCase();
+  filterWinRatesDOM();
+};
+
+window.handleWinRatesFilter = function(filterId) {
+  state.winRatesTypeFilter = filterId;
+  renderApp();
+};
+
+function filterWinRatesDOM() {
+  const query = state.winRatesSearch || "";
+  const filter = state.winRatesTypeFilter || "all";
+  const rows = document.querySelectorAll(".hand-row");
+  rows.forEach(row => {
+    const hand = (row.getAttribute("data-hand") || "").toLowerCase();
+    const type = row.getAttribute("data-type") || "all";
+    
+    const matchesQuery = hand.includes(query);
+    const matchesFilter = filter === "all" || type === filter;
+
+    if (matchesQuery && matchesFilter) {
+      row.style.setProperty("display", "table-row", "important");
+    } else {
+      row.style.setProperty("display", "none", "important");
+    }
+  });
+}
 
 /**
  * Get hand key for preflop data mapping
@@ -829,7 +1230,7 @@ window.startTournamentWith = function(count) {
   // Hero always id 0
   players.push({
     id: 0,
-    name: "Hero",
+    name: "Player",
     flag: "👤",
     stack: initialStack,
     isHero: true,
@@ -879,7 +1280,8 @@ window.startTournamentWith = function(count) {
     currentTurnPlayerId: 0,
     lastRaiserId: -1,
     eliminatedLog: [],
-    finished: false
+    finished: false,
+    handWinners: null
   };
 
   nextHand();
@@ -917,15 +1319,35 @@ function nextHand() {
     triggerBlindUpAnimation();
   }
 
-  // 3. Shuffling seat indices for randomized table visual seating
-  const counts = tour.players.filter(p => p.isActive).length;
-  // Get available visual indexes of the seats
-  let candidateSeats = [0, 1, 2, 3, 4, 5].slice(0, state.playerCount);
-  candidateSeats = candidateSeats.sort(() => 0.5 - Math.random());
-  
+  // 3. Pin Hero at Seat 0 (Bottom). Shuffle other seats for dynamic positions.
+  const heroPlayer = tour.players.find(p => p.id === 0);
+  if (heroPlayer) {
+    heroPlayer.seatIndex = 0;
+  }
+
+  // Get available visual indices for CPU positions based on playerCount
+  let cpuSeats = [];
+  if (state.playerCount === 2) {
+    cpuSeats = [3];
+  } else if (state.playerCount === 3) {
+    cpuSeats = [2, 4];
+  } else if (state.playerCount === 4) {
+    cpuSeats = [1, 3, 5];
+  } else if (state.playerCount === 5) {
+    cpuSeats = [1, 2, 4, 5];
+  } else {
+    cpuSeats = [1, 2, 3, 4, 5];
+  }
+  // Shuffle cpuSeats
+  cpuSeats = cpuSeats.sort(() => 0.5 - Math.random());
+
   tour.players.forEach(p => {
-    if (p.isActive) {
-      p.seatIndex = candidateSeats.pop();
+    if (p.id !== 0) {
+      if (p.isActive) {
+        p.seatIndex = cpuSeats.pop() || 1;
+      } else {
+        p.seatIndex = -1;
+      }
     }
   });
 
@@ -960,9 +1382,11 @@ function nextHand() {
     p.isFolded = !p.isActive;
     p.isAllIn = false;
     p.totalBet = 0;
+    p.handContribution = 0;
     p.currentRoundBet = 0;
     p.actionText = "";
     p.actionColor = "";
+    p.actedThisRound = false;
     if (p.isActive) {
       p.cards = [deck.pop(), deck.pop()];
     } else {
@@ -974,6 +1398,7 @@ function nextHand() {
   tour.pot = 0;
   tour.stage = "PREFLOP";
   tour.deck = deck;
+  tour.handWinners = null;
 
   // 7. Deduct force blind bets
   postBlinds();
@@ -991,7 +1416,7 @@ function nextHand() {
   // Trigger CPU play loop
   setTimeout(() => {
     runTurnCycle();
-  }, 350);
+  }, 50);
 }
 
 function triggerBlindUpAnimation() {
@@ -1059,7 +1484,15 @@ function runTurnCycle() {
 
   // If everyone else is all-in, or only 1 person remains capable of betting, skip directly to board running
   const fullyActiveCount = unfolded.filter(p => p.stack > 0 && !p.isAllIn).length;
-  if (fullyActiveCount <= 1 && reachedAgreement()) {
+  let onlyActivePlayerIsFacingBet = false;
+  if (fullyActiveCount === 1) {
+    const onlyActive = unfolded.find(p => p.stack > 0 && !p.isAllIn);
+    if (onlyActive && tour.currentRoundMaxBet > onlyActive.totalBet) {
+      onlyActivePlayerIsFacingBet = true;
+    }
+  }
+
+  if (fullyActiveCount === 0 || (fullyActiveCount === 1 && !onlyActivePlayerIsFacingBet)) {
     runRemainingBoardCards();
     return;
   }
@@ -1074,7 +1507,7 @@ function runTurnCycle() {
   const currentPlayer = tour.players.find(p => p.id === tour.currentTurnPlayerId);
   if (currentPlayer.isFolded || currentPlayer.isAllIn || !currentPlayer.isActive) {
     setNextPlayerTurn();
-    setTimeout(runTurnCycle, 50);
+    setTimeout(runTurnCycle, 5);
     return;
   }
 
@@ -1086,7 +1519,7 @@ function runTurnCycle() {
     renderApp();
     setTimeout(() => {
       executeCpuTurn(currentPlayer);
-    }, 280); // Quick thinking mimic window
+    }, 15); // Quick thinking mimic window
   }
 }
 
@@ -1095,22 +1528,19 @@ function runTurnCycle() {
  */
 function reachedAgreement() {
   const tour = state.tour;
-  const activePlayers = tour.players.filter(p => p.isActive && !p.isFolded);
+  const activeUnfolded = tour.players.filter(p => p.isActive && !p.isFolded);
   
   // Everyone must match the max bet or be all-in
   const betToMatch = tour.currentRoundMaxBet;
   
-  for (let p of activePlayers) {
+  for (let p of activeUnfolded) {
     if (p.isAllIn) continue;
+    if (!p.actedThisRound) {
+      return false;
+    }
     if (p.totalBet !== betToMatch) {
       return false;
     }
-  }
-
-  // Also has everyone had a chance to act?
-  // If lastRaiserId === -1, it means we just started and no one acted
-  if (tour.lastRaiserId === -1) {
-    return false;
   }
 
   return true;
@@ -1132,7 +1562,9 @@ function advanceToNextStreet() {
   // Sweep bets on players to center pot
   tour.players.forEach(p => {
     tour.pot += p.totalBet;
+    p.handContribution = (p.handContribution || 0) + p.totalBet;
     p.totalBet = 0; // reset committed for new round
+    p.actedThisRound = false; // Reset action flag for new street
   });
   tour.currentRoundMaxBet = 0;
   tour.lastRaiserId = -1;
@@ -1171,7 +1603,7 @@ function advanceToNextStreet() {
   }
 
   renderApp();
-  setTimeout(runTurnCycle, 350);
+  setTimeout(runTurnCycle, 100);
 }
 
 /**
@@ -1182,6 +1614,7 @@ function runRemainingBoardCards() {
   // Sweep bets
   tour.players.forEach(p => {
     tour.pot += p.totalBet;
+    p.handContribution = (p.handContribution || 0) + p.totalBet;
     p.totalBet = 0;
   });
   tour.currentRoundMaxBet = 0;
@@ -1192,7 +1625,7 @@ function runRemainingBoardCards() {
 
   tour.stage = "SHOWDOWN";
   renderApp();
-  setTimeout(concludeRoundWithShowdown, 600);
+  setTimeout(concludeRoundWithShowdown, 150);
 }
 
 /**
@@ -1202,14 +1635,16 @@ function handleHeroAction(actionType) {
   const tour = state.tour;
   const hero = tour.players.find(p => p.id === 0);
   const callPrice = tour.currentRoundMaxBet - hero.totalBet;
+  const oldRoundMaxBet = tour.currentRoundMaxBet;
 
   if (actionType === "FOLD") {
     hero.isFolded = true;
     hero.actionText = t("fold");
     hero.actionColor = "red";
+    hero.actedThisRound = true;
     tour.lastRaiserId = 0; // counted as acted
     setNextPlayerTurn();
-    setTimeout(runTurnCycle, 150);
+    setTimeout(runTurnCycle, 15);
   } else if (actionType === "CALL") {
     if (callPrice >= hero.stack) {
       // forced all-in call
@@ -1224,10 +1659,23 @@ function handleHeroAction(actionType) {
       hero.actionText = callPrice <= 0 ? t("check") : t("call");
       hero.actionColor = "gray";
     }
-    tour.currentRoundMaxBet = Math.max(tour.currentRoundMaxBet, hero.totalBet);
+    hero.actedThisRound = true;
+
+    const isBetOrRaise = hero.totalBet > oldRoundMaxBet;
+    if (isBetOrRaise) {
+      tour.currentRoundMaxBet = hero.totalBet;
+      tour.players.forEach(other => {
+        if (other.id !== hero.id) {
+          other.actedThisRound = false;
+        }
+      });
+    } else {
+      tour.currentRoundMaxBet = Math.max(tour.currentRoundMaxBet, hero.totalBet);
+    }
+
     tour.lastRaiserId = 0;
     setNextPlayerTurn();
-    setTimeout(runTurnCycle, 150);
+    setTimeout(runTurnCycle, 15);
   } else if (actionType === "ALLIN") {
     const raiseContribution = hero.stack;
     hero.totalBet += raiseContribution;
@@ -1235,11 +1683,23 @@ function handleHeroAction(actionType) {
     hero.isAllIn = true;
     hero.actionText = t("allin");
     hero.actionColor = "yellow";
+    hero.actedThisRound = true;
     
-    tour.currentRoundMaxBet = Math.max(tour.currentRoundMaxBet, hero.totalBet);
+    const isBetOrRaise = hero.totalBet > oldRoundMaxBet;
+    if (isBetOrRaise) {
+      tour.currentRoundMaxBet = hero.totalBet;
+      tour.players.forEach(other => {
+        if (other.id !== hero.id) {
+          other.actedThisRound = false;
+        }
+      });
+    } else {
+      tour.currentRoundMaxBet = Math.max(tour.currentRoundMaxBet, hero.totalBet);
+    }
+    
     tour.lastRaiserId = 0;
     setNextPlayerTurn();
-    setTimeout(runTurnCycle, 150);
+    setTimeout(runTurnCycle, 15);
   }
 }
 
@@ -1250,6 +1710,7 @@ window.handleHeroRaise = function(amt) {
   const tour = state.tour;
   const hero = tour.players.find(p => p.id === 0);
   const callPrice = tour.currentRoundMaxBet - hero.totalBet;
+  const oldRoundMaxBet = tour.currentRoundMaxBet;
   const requiredTotalBet = tour.currentRoundMaxBet + amt;
   const requiredCommit = requiredTotalBet - hero.totalBet;
 
@@ -1263,13 +1724,25 @@ window.handleHeroRaise = function(amt) {
   hero.totalBet = requiredTotalBet;
   hero.actionText = `${t("raise")} $${requiredCommit}`;
   hero.actionColor = "green";
+  hero.actedThisRound = true;
 
-  tour.currentRoundMaxBet = hero.totalBet;
+  const isBetOrRaise = hero.totalBet > oldRoundMaxBet;
+  if (isBetOrRaise) {
+    tour.currentRoundMaxBet = hero.totalBet;
+    tour.players.forEach(other => {
+      if (other.id !== hero.id) {
+        other.actedThisRound = false;
+      }
+    });
+  } else {
+    tour.currentRoundMaxBet = Math.max(tour.currentRoundMaxBet, hero.totalBet);
+  }
+
   // Hero is the new raiser
   tour.lastRaiserId = 0;
   
   setNextPlayerTurn();
-  setTimeout(runTurnCycle, 150);
+  setTimeout(runTurnCycle, 15);
 };
 
 /**
@@ -1279,6 +1752,7 @@ window.handleHeroRaise = function(amt) {
 function executeCpuTurn(p) {
   const tour = state.tour;
   const callPrice = tour.currentRoundMaxBet - p.totalBet;
+  const oldRoundMaxBet = tour.currentRoundMaxBet;
   
   // Basic hand equity profile simulation
   const cardPower = getPlayerCardStrengthScore(p);
@@ -1293,7 +1767,7 @@ function executeCpuTurn(p) {
   if (difficulty === "pro") bluffProb = 0.22;
 
   // Active headcounts on high-level speedups
-  const unfoldedCount = tour.players.filter(p => p.isActive && !p.isFolded).length;
+  const unfoldedCount = tour.players.filter(p1 => p1.isActive && !p1.isFolded).length;
   if (unfoldedCount <= 3 && (difficulty === "hard" || difficulty === "pro")) {
     // 2-3 Handed play naturally gets much more aggressive at scale
     bluffProb += 0.15;
@@ -1369,15 +1843,11 @@ function executeCpuTurn(p) {
       p.isAllIn = true;
       p.actionText = t("allin");
       p.actionColor = "yellow";
-      tour.currentRoundMaxBet = Math.max(tour.currentRoundMaxBet, p.totalBet);
-      tour.lastRaiserId = p.id;
     } else {
       p.stack -= requiredCommit;
       p.totalBet += requiredCommit;
       p.actionText = `${t("raise")} $${requiredCommit}`;
       p.actionColor = "green";
-      tour.currentRoundMaxBet = p.totalBet;
-      tour.lastRaiserId = p.id;
     }
   } else {
     // CALL or CHECK
@@ -1393,11 +1863,26 @@ function executeCpuTurn(p) {
       p.actionText = callPrice <= 0 ? t("check") : t("call");
       p.actionColor = "gray";
     }
+  }
+
+  p.actedThisRound = true;
+
+  const isBetOrRaise = p.totalBet > oldRoundMaxBet;
+  if (isBetOrRaise) {
+    tour.currentRoundMaxBet = p.totalBet;
+    tour.players.forEach(other => {
+      if (other.id !== p.id) {
+        other.actedThisRound = false;
+      }
+    });
+  } else {
     tour.currentRoundMaxBet = Math.max(tour.currentRoundMaxBet, p.totalBet);
   }
 
+  tour.lastRaiserId = p.id;
+
   setNextPlayerTurn();
-  setTimeout(runTurnCycle, 150);
+  setTimeout(runTurnCycle, 15);
 }
 
 /**
@@ -1430,6 +1915,7 @@ function concludeRoundWithNoShowdown() {
   // Sweep bets
   tour.players.forEach(p => {
     tour.pot += p.totalBet;
+    p.handContribution = (p.handContribution || 0) + p.totalBet;
     p.totalBet = 0;
   });
 
@@ -1437,6 +1923,15 @@ function concludeRoundWithNoShowdown() {
   winner.stack += tour.pot;
   winner.actionText = `WIN +$${tour.pot}`;
   winner.actionColor = "green";
+
+  // Record hand winner info
+  tour.handWinners = [{
+    name: winner.isHero ? "Player" : winner.name,
+    flag: winner.flag,
+    handName: state.lang === "ja" ? "全員フォールド" : "Everyone Folded",
+    wonAmount: tour.pot,
+    isHero: winner.isHero
+  }];
 
   // If winner is Hero, save to history
   if (winner.id === 0) {
@@ -1464,6 +1959,7 @@ function concludeRoundWithShowdown() {
   // Sweep bets
   tour.players.forEach(p => {
     tour.pot += p.totalBet;
+    p.handContribution = (p.handContribution || 0) + p.totalBet;
     p.totalBet = 0;
   });
 
@@ -1506,7 +2002,9 @@ function concludeRoundWithShowdown() {
   const showDownOrder = showdownEvaluated.map(se => se.player);
 
   // Distribute via Side Pot contributions safely
-  const potAllocations = distributePot(tour.players, tour.players.filter(p => p.isActive).map(p => p.id), showDownOrder);
+  const potAllocations = distributePot(tour.players, tour.players.filter(p => p.isActive).map(p => p.id), showdownEvaluated);
+  
+  const finalWinners = [];
   
   // Display outcomes on bubbles
   tour.players.forEach(p => {
@@ -1516,11 +2014,21 @@ function concludeRoundWithShowdown() {
       const matchedEval = showdownEvaluated.find(se => se.id === p.id);
       p.actionText = `${matchedEval.bestHand.typeName} +$${share}`;
       p.actionColor = "yellow";
+      
+      finalWinners.push({
+        name: p.isHero ? "Player" : p.name,
+        flag: p.flag,
+        handName: matchedEval ? matchedEval.bestHand.typeName : "",
+        wonAmount: share,
+        isHero: p.isHero
+      });
     } else if (!p.isFolded) {
       p.actionText = t("fold");
       p.actionColor = "red";
     }
   });
+
+  tour.handWinners = finalWinners;
 
   // Log history
   const isHeroWin = (potAllocations[0] || 0) > 0;
@@ -1538,34 +2046,89 @@ function concludeRoundWithShowdown() {
 /**
  * Handle Side Pot mathematics safely
  */
-function distributePot(players, activePlayerIds, showDownPlayers) {
-  let contributions = players.map(p => ({ id: p.id, betLength: p.totalBet }));
+/**
+ * Determine if two hands have identical Texas Hold'em hand strength (split tie)
+ */
+function isSameHandStrength(handA, handB) {
+  if (handA.type !== handB.type) return false;
+  for (let i = 0; i < handA.tieBreakers.length; i++) {
+    if (handA.tieBreakers[i] !== handB.tieBreakers[i]) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * Handle Side Pot and Split Pot mathematics safely
+ */
+function distributePot(players, activePlayerIds, showdownEvaluated) {
+  let contributions = players.map(p => ({ id: p.id, betLength: p.handContribution || 0 }));
   let potAllocations = players.map(p => 0);
 
-  for (let winner of showDownPlayers) {
-    let winnerId = winner.id;
-    let winnerContrib = contributions.find(c => c.id === winnerId);
-    if (!winnerContrib) continue;
-    let winnerBet = winnerContrib.betLength;
-    if (winnerBet <= 0) continue;
-
-    let totalGained = 0;
-    for (let contrib of contributions) {
-      let chunk = Math.min(contrib.betLength, winnerBet);
-      contrib.betLength -= chunk;
-      totalGained += chunk;
+  // Group showdownEvaluated candidates into tiers of equal hand strength
+  let tiers = [];
+  for (let evalObj of showdownEvaluated) {
+    if (tiers.length === 0) {
+      tiers.push([evalObj]);
+    } else {
+      let lastTier = tiers[tiers.length - 1];
+      if (isSameHandStrength(lastTier[0].bestHand, evalObj.bestHand)) {
+        lastTier.push(evalObj);
+      } else {
+        tiers.push([evalObj]);
+      }
     }
-    potAllocations[winnerId] += totalGained;
   }
 
-  // Sweep remainder
+  // Iterate over tiers of players from best hands to worst
+  for (let tier of tiers) {
+    let tierPlayers = tier.map(t => t.player);
+
+    while (true) {
+      // Find tier players who still have contribution/claims left to make
+      let activeEligible = tierPlayers.filter(p => {
+        let cnt = contributions.find(c => c.id === p.id);
+        return cnt && cnt.betLength > 0;
+      });
+      if (activeEligible.length === 0) break;
+
+      // Find the min pending bet length among the tied active eligible winners
+      let minBet = Infinity;
+      activeEligible.forEach(p => {
+        let cnt = contributions.find(c => c.id === p.id);
+        if (cnt.betLength < minBet) minBet = cnt.betLength;
+      });
+
+      // Accumulate the side subpot slices up to minBet from all participants
+      let subPot = 0;
+      for (let contrib of contributions) {
+        let chunk = Math.min(contrib.betLength, minBet);
+        contrib.betLength -= chunk;
+        subPot += chunk;
+      }
+
+      // Distribute split subpot among these activeEligible tied winners
+      let share = Math.floor(subPot / activeEligible.length);
+      let extra = subPot % activeEligible.length;
+
+      activeEligible.forEach((p, idx) => {
+        potAllocations[p.id] += share;
+        if (idx < extra) {
+          potAllocations[p.id] += 1;
+        }
+      });
+    }
+  }
+
+  // Sweep remaining residuals (e.g. uncalled bets)
   let remainingPot = 0;
   for (let contrib of contributions) {
     remainingPot += contrib.betLength;
     contrib.betLength = 0;
   }
-  if (remainingPot > 0 && showDownPlayers.length > 0) {
-    const absoluteWinnerId = showDownPlayers[0].id;
+  if (remainingPot > 0 && showdownEvaluated.length > 0) {
+    const absoluteWinnerId = showdownEvaluated[0].id;
     potAllocations[absoluteWinnerId] += remainingPot;
   }
 
@@ -1588,7 +2151,7 @@ function reapEliminatedPlayers() {
       
       tour.eliminatedLog.unshift({
         id: p.id,
-        name: p.isHero ? "Hero" : p.name,
+        name: p.isHero ? "Player" : p.name,
         rank: finishedRank
       });
     }
@@ -1609,9 +2172,9 @@ function concludeTournament() {
   if (activeCount === 1) {
     const winnerPlayer = tour.players.find(p => p.isActive);
     resultsList.unshift({
-      id: winnerPlayer.id,
-      name: winnerPlayer.isHero ? "Hero" : winnerPlayer.name,
-      rank: 1
+       id: winnerPlayer.id,
+       name: winnerPlayer.isHero ? "Player" : winnerPlayer.name,
+       rank: 1
     });
   }
 
@@ -1728,6 +2291,85 @@ function getCombinations(array, k) {
   return result;
 }
 
+/**
+ * Evaluates 5 cards to determine hand type and relative strength tiebreakers.
+ */
+function evaluate5CardHand(cards) {
+  const sorted = [...cards].sort((a, b) => b.rank - a.rank);
+  const ranks = sorted.map(c => c.rank);
+  const suits = sorted.map(c => c.suit);
+  
+  const isFlush = suits.every(s => s === suits[0]);
+  
+  // Check straight
+  let isStraight = false;
+  const uniqueRanks = Array.from(new Set(ranks));
+  let straightHigh = 0;
+  if (uniqueRanks.length === 5) {
+    if (ranks[0] - ranks[4] === 4) {
+      isStraight = true;
+      straightHigh = ranks[0];
+    } else if (ranks[0] === 14 && ranks[1] === 5 && ranks[2] === 4 && ranks[3] === 3 && ranks[4] === 2) {
+      // Ace-low straight (A, 5, 4, 3, 2)
+      isStraight = true;
+      straightHigh = 5;
+    }
+  }
+  
+  // Count counts of each rank
+  const counts = {};
+  ranks.forEach(r => { counts[r] = (counts[r] || 0) + 1; });
+  const countsArray = Object.keys(counts).map(r => ({ rank: parseInt(r), count: counts[r] }));
+  
+  // Sort countsArray by count descending, then rank descending
+  countsArray.sort((a, b) => {
+    if (b.count !== a.count) return b.count - a.count;
+    return b.rank - a.rank;
+  });
+  
+  let type = 0;
+  let tieBreakers = [];
+  
+  if (isStraight && isFlush) {
+    if (straightHigh === 14) {
+      type = 9; // Royal Flush
+    } else {
+      type = 8; // Straight Flush
+    }
+    tieBreakers = [straightHigh];
+  } else if (countsArray[0].count === 4) {
+    type = 7; // Four of a Kind
+    tieBreakers = [countsArray[0].rank, countsArray[1].rank];
+  } else if (countsArray[0].count === 3 && countsArray[1].count === 2) {
+    type = 6; // Full House
+    tieBreakers = [countsArray[0].rank, countsArray[1].rank];
+  } else if (isFlush) {
+    type = 5; // Flush
+    tieBreakers = ranks;
+  } else if (isStraight) {
+    type = 4; // Straight
+    tieBreakers = [straightHigh];
+  } else if (countsArray[0].count === 3) {
+    type = 3; // Three of a Kind
+    tieBreakers = [countsArray[0].rank, countsArray[1].rank, countsArray[2].rank];
+  } else if (countsArray[0].count === 2 && countsArray[1].count === 2) {
+    type = 2; // Two Pair
+    tieBreakers = [countsArray[0].rank, countsArray[1].rank, countsArray[2].rank];
+  } else if (countsArray[0].count === 2) {
+    type = 1; // One Pair
+    tieBreakers = [countsArray[0].rank, countsArray[1].rank, countsArray[2].rank, countsArray[3].rank];
+  } else {
+    type = 0; // High Card
+    tieBreakers = ranks;
+  }
+  
+  return {
+    type,
+    typeName: getHandTypeName(type),
+    tieBreakers
+  };
+}
+
 function getHandTypeName(type) {
   const ja = ["ハイカード", "ワンペア", "ツーペア", "スリーカード", "ストレート", "フラッシュ", "フルハウス", "フォーカード", "ストレートフラッシュ", "ロイヤルフラッシュ"];
   const en = ["High Card", "One Pair", "Two Pair", "Three of a Kind", "Straight", "Flush", "Full House", "Four of a Kind", "Straight Flush", "Royal Flush"];
@@ -1763,8 +2405,8 @@ function saveHandResultToHistory(cards, isWin) {
   const history = getHistory();
   history.unshift(record);
   
-  // Cap at 50 records for lightweight low overhead operation
-  if (history.length > 50) {
+  // Cap at 1000 records for storing a much larger history
+  if (history.length > 1000) {
     history.pop();
   }
 
