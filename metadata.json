@@ -1,0 +1,6 @@
+{
+  "name": "WPT Poker Tournament",
+  "description": "スマホ縦画面専用のWPT（World Poker Tour）風テキサスホールデムWebアプリ。WPT風トーナメントを高速周回しながら、プリフロップ勝率を参考に、実戦感覚・経験を鍛えます。",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

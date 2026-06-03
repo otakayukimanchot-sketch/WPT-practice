@@ -1,0 +1,228 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-display: "Outfit", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+}
+
+/* Base resets & theme properties */
+body {
+  background-color: #050505;
+  color: #e5e5e5;
+  font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  height: 100vh;
+  width: 100vw;
+  margin: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+/* Custom Webkit scrollbar for premium density scroll lists */
+::-webkit-scrollbar {
+  width: 4px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #222;
+  border-radius: 2px;
+}
+
+/* Device mock border and shadow */
+#app {
+  width: 100%;
+  max-width: 432px;
+  height: 100%;
+  max-height: 768px;
+  background: #000;
+  box-shadow: 0 0 50px rgba(0, 0, 0, 0.85);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  border-color: #1a1a1a;
+}
+@media (min-width: 480px) {
+  #app {
+    border: 8px solid #1a1a1a;
+    border-radius: 40px;
+  }
+}
+
+/* High Density poker table felt */
+.wpt-poker-table-outer {
+  position: relative;
+  background: radial-gradient(circle, #0f2a1d 0%, #050505 100%);
+  border: 4px solid #222;
+  border-radius: 110px;
+  box-shadow: inset 0 0 20px rgba(0, 0, 0, 1);
+}
+
+/* WPT card deck styling */
+.wpt-card {
+  background: white;
+  border-radius: 4px;
+  color: black;
+  font-weight: bold;
+  width: 34px;
+  height: 50px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+  transition: transform 0.15s ease-out;
+}
+.wpt-card .card-rank {
+  font-size: 11px;
+  line-height: 1;
+  font-weight: 800;
+}
+.wpt-card .card-suit {
+  font-size: 16px;
+  line-height: 1;
+  margin-top: 1px;
+  font-weight: normal;
+}
+
+/* Suit colors standard mapping */
+.suit-black { color: #000000; }
+.suit-red { color: #d11111; }
+.suit-spade { color: #000000; }
+.suit-heart { color: #d11111; }
+.suit-diamond { color: #1e3a8a; } /* Blue diamond for WPT standard */
+.suit-club { color: #065f46; }    /* Green club for WPT standard */
+
+/* Action bubbles from the design specs */
+.action-bubble-wpt {
+  position: absolute;
+  top: -24px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 2.5px 10px;
+  border-radius: 4px;
+  font-weight: 800;
+  text-transform: uppercase;
+  font-size: 10px;
+  white-space: nowrap;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.7);
+  z-index: 20;
+}
+
+/* Sizing and incremental button grids */
+.btn-wpt {
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: linear-gradient(to bottom, #222, #111);
+  color: #e5e5e5;
+  transition: opacity 0.1s, background-color 0.1s;
+}
+.btn-wpt:active {
+  background: #333;
+}
+
+/* WPT actions button sets mapping */
+.btn-action-wpt-fold {
+  background-color: rgba(127, 29, 29, 0.35);
+  border: 1px solid rgb(127, 29, 29);
+  color: rgb(239, 68, 68);
+}
+.btn-action-wpt-fold:active {
+  background-color: rgba(127, 29, 29, 0.5);
+}
+
+.btn-action-wpt-check {
+  background-color: #27272a;
+  border: 1px solid #3f3f46;
+  color: #ffffff;
+}
+.btn-action-wpt-check:active {
+  background-color: #3f3f46;
+}
+
+.btn-action-wpt-raise {
+  background-color: rgba(20, 83, 45, 0.35);
+  border: 1px solid rgb(20, 83, 45);
+  color: rgb(34, 197, 94);
+}
+.btn-action-wpt-raise:active {
+  background-color: rgba(20, 83, 45, 0.5);
+}
+
+/* Premium Gold Accent primary triggers */
+.btn-wpt-gold {
+  background: linear-gradient(180deg, #d4af37 0%, #aa8410 100%);
+  border: 1px solid #ffdf7a;
+  color: #000000;
+  font-weight: 700;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  text-shadow: 0 0.5px 0.5px rgba(255, 255, 255, 0.4);
+}
+.btn-wpt-gold:active {
+  transform: translateY(1px);
+  background: linear-gradient(180deg, #c59f2a 0%, #906e0c 100%);
+}
+
+.btn-wpt-dark {
+  background: linear-gradient(to bottom, #222, #111);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #f4f4f5;
+}
+.btn-wpt-dark:active {
+  background: #333;
+}
+
+/* Turn active visual glow rings */
+.active-turn-ring {
+  box-shadow: 0 0 14px rgba(212, 175, 55, 0.7);
+  border-color: #d4af37 !important;
+}
+
+/* Quick thinking blink animations */
+.thinking-dot {
+  animation: thinking 1s infinite ease-in-out;
+}
+@keyframes thinking {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 1; }
+}
+
+/* Deal card micro transitions */
+@keyframes deal-card-left {
+  0% {
+    transform: translate(0, -80px) rotate(35deg) scale(0.6);
+    opacity: 0;
+  }
+  100% {
+    transform: translate(0, 0) rotate(0) scale(1.1);
+    opacity: 1;
+  }
+}
+@keyframes deal-card-right {
+  0% {
+    transform: translate(0, -80px) rotate(-35deg) scale(0.6);
+    opacity: 0;
+  }
+  100% {
+    transform: translate(0, 0) rotate(0) scale(1.1);
+    opacity: 1;
+  }
+}
+.animate-deal-l {
+  animation: deal-card-left 0.22s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+}
+.animate-deal-r {
+  animation: deal-card-right 0.22s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+}
+
+/* Transition fades */
+.fade-in {
+  animation: fadeIn 0.18s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+@keyframes fadeIn {
+  from { opacity: 0; transform: scale(0.98); }
+  to { opacity: 1; transform: scale(1); }
+}
