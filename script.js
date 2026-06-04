@@ -110,19 +110,10 @@ const SUIT_SYMBOL = { S: "♠", H: "♥", D: "♦", C: "♣" };
 const SUIT_CLASS = { S: "suit-spade", H: "suit-heart", D: "suit-diamond", C: "suit-club" };
 
 /**
- * Retrieve country flag image from CDN, or fallback to text if user-defined or non-standard
+ * Retrieve country flag image natively, using standard unicode flag emoji directly to avoid external requests
  */
 function getFlagHtml(flag, forClass = "w-4.5 h-3") {
-  const FLAG_MAP = {
-    "🇺🇸": "https://flagcdn.com/w40/us.png",
-    "🇩🇰": "https://flagcdn.com/w40/dk.png",
-    "🇪🇸": "https://flagcdn.com/w40/es.png",
-    "🇨🇦": "https://flagcdn.com/w40/ca.png",
-  };
-  if (FLAG_MAP[flag]) {
-    return `<img src="${FLAG_MAP[flag]}" class="${forClass} object-cover rounded shadow-xs shrink-0 inline-block align-middle" alt="flag" referrerPolicy="no-referrer" />`;
-  }
-  return `<span class="inline-block align-middle">${flag || "👤"}</span>`;
+  return `<span class="inline-block align-middle select-none text-[11px] leading-none shrink-0" style="margin-right: 2px;">${flag || "👤"}</span>`;
 }
 
 // CPU Natural Names pool
@@ -145,13 +136,14 @@ const CPU_NAME_POOL = [
 
 // Local state
 let state = {
-  currentScreen: "title", // title, settings, history, playerCountSelect, game
+  currentScreen: "title", // title, settings, history, playerCountSelect, difficultySelect, game
   lang: localStorage.getItem("wpt_lang") === "en" ? "en" : "ja",
-  difficulty: localStorage.getItem("wpt_diff") || "normal", // beginner, normal, hard, pro
+  difficulty: localStorage.getItem("wpt_diff") || "normal", // beginner, casual, intermediate, advanced, hard, expert
   ecoMode: localStorage.getItem("wpt_eco_mode") === "true",
   playerCount: 6,
   showShareOverlay: false,
   showWinRatesOverlay: false,
+  showProbabilities: true,
   winRatesSearch: "",
   winRatesTypeFilter: "all", // all, pockets, suited, offsuit
   winRatesPlayersCount: "all", // all, 2, 3, 4, 5, 6
@@ -210,6 +202,9 @@ function renderApp() {
     case "playerCountSelect":
       html = createPlayerCountScreenHtml();
       break;
+    case "difficultySelect":
+      html = createDifficultySelectScreenHtml();
+      break;
     case "game":
       html = createGameScreenHtml();
       break;
@@ -231,7 +226,7 @@ function renderApp() {
  */
 function createTitleScreenHtml() {
   const currentUrl = window.location.href;
-  const qrCodeUrl = `./src/assets/images/square_qr_code_1780499703406.png`;
+  const qrCodeUrl = `./src/assets/images/app_qr_code_1780558124495.png`;
 
   let shareOverlayHtml = "";
   if (state.showShareOverlay) {
@@ -335,24 +330,6 @@ function createSettingsScreenHtml() {
           </div>
         </div>
 
-        <!-- Difficulty settings -->
-        <div>
-          <label class="block text-xs text-neutral-400 font-semibold uppercase tracking-wider mb-2.5 font-mono">
-            ${t("difficulty")}
-          </label>
-          <div class="grid grid-cols-2 gap-3">
-            ${["beginner", "normal", "hard", "pro"].map(diff => {
-              const active = state.difficulty === diff;
-              return `
-                <button class="py-2.5 px-4 text-xs font-medium rounded-lg border text-left flex justify-between items-center ${active ? "border-amber-500 text-amber-500 bg-amber-500/5" : "border-neutral-800 text-neutral-400"}" onclick="changeDifficulty('${diff}')">
-                  <span>${t(diff)}</span>
-                  ${active ? `<span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>` : ""}
-                </button>
-              `;
-            }).join("")}
-          </div>
-        </div>
-
         <!-- Eco Mode Option -->
         <div class="mt-6">
           <label class="block text-xs text-neutral-400 font-semibold uppercase tracking-wider mb-2.5 font-mono flex items-center gap-1.5">
@@ -374,8 +351,8 @@ function createSettingsScreenHtml() {
         </div>
       </div>
 
-      <div class="text-[10px] text-neutral-600 font-mono text-center">
-        DIFFICULTY CHANGES WILL BE REFLECTED FROM NEXT TOURNAMENT
+      <div class="text-[10px] text-neutral-600 font-mono text-center uppercase tracking-widest font-bold">
+        WPT Poker Tournament
       </div>
     </div>
   `;
@@ -390,9 +367,16 @@ function createHistoryScreenHtml() {
     <div class="flex-1 flex flex-col p-6 fade-in overflow-hidden h-full">
       <div class="flex items-center justify-between mb-4 pb-3 border-b border-neutral-900 flex-shrink-0">
         <h2 class="text-lg font-bold font-display text-neutral-200">${t("handHistory")}</h2>
-        <button id="btn-history-back" class="text-xs text-neutral-400 font-medium bg-neutral-900 py-1.5 px-3 rounded-md hover:text-white">
-          ${t("back")}
-        </button>
+        <div class="flex items-center gap-2">
+          ${history.length > 0 ? `
+            <button id="btn-copy-history" class="text-[10px] bg-amber-500 hover:bg-amber-400 text-neutral-950 font-extrabold py-1.5 px-3 rounded shadow transition-colors flex items-center gap-1 cursor-pointer">
+              COPY RESULTS
+            </button>
+          ` : ""}
+          <button id="btn-history-back" class="text-xs text-neutral-400 font-medium bg-neutral-900 py-1.5 px-3 rounded-md hover:text-white">
+            ${t("back")}
+          </button>
+        </div>
       </div>
 
       <div class="flex-1 overflow-y-auto pr-0.5 space-y-2">
@@ -425,6 +409,176 @@ function createHistoryScreenHtml() {
 }
 
 /**
+ * Renders a card as a standard playing card
+ */
+function renderStandardPlayingCard(card, extraClasses = "") {
+  if (!card) return "";
+  const cls = SUIT_CLASS[card.suit];
+  const sym = SUIT_SYMBOL[card.suit];
+  return `
+    <div class="wpt-card relative bg-white border border-neutral-300 rounded shadow-md text-black flex flex-col justify-between p-1 select-none ${extraClasses}">
+      <!-- Top-left tiny rank and suit -->
+      <div class="flex flex-col items-center leading-none self-start">
+        <span class="text-[9px] font-extrabold uppercase leading-none grow-0">${card.rankLabel}</span>
+        <span class="${cls} text-[8px] leading-none -mt-0.5 grow-0">${sym}</span>
+      </div>
+      
+      <!-- Center big suit symbol -->
+      <div class="${cls} text-lg leading-none self-center -mt-1 scale-110 grow">${sym}</div>
+      
+      <!-- Bottom-right tiny rank and suit (inverted) -->
+      <div class="flex flex-col items-center leading-none self-end transform rotate-180 grow-0">
+        <span class="text-[9px] font-extrabold uppercase leading-none">${card.rankLabel}</span>
+        <span class="${cls} text-[8px] leading-none -mt-0.5">${sym}</span>
+      </div>
+    </div>
+  `;
+}
+
+/**
+ * Renders a miniature seat-hole card in standard design
+ */
+function renderMiniPlayingCard(card) {
+  if (!card) return "";
+  const cls = SUIT_CLASS[card.suit];
+  const sym = SUIT_SYMBOL[card.suit];
+  return `
+    <div class="w-[20px] h-[28px] bg-white rounded border border-neutral-300 text-black flex flex-col justify-between p-0.5 font-bold shadow-sm select-none relative">
+      <div class="text-[7.5px] font-extrabold leading-none self-start">${card.rankLabel}</div>
+      <div class="${cls} text-[10px] leading-none self-center -mt-0.5">${sym}</div>
+      <div class="text-[7.5px] font-extrabold leading-none self-end transform rotate-180">${card.rankLabel}</div>
+    </div>
+  `;
+}
+
+/**
+ * Render the intermediate select difficulty screen
+ */
+function createDifficultySelectScreenHtml() {
+  const difficulties = [
+    { key: "beginner", num: 1, name: t("beginner"), desc: state.lang === "ja" ? "ルースパッシブ、ミス多め" : "Loose-passive, makes frequent mistakes" },
+    { key: "casual", num: 2, name: state.lang === "ja" ? "カジュアル (一般)" : "Level 2 — Casual", desc: state.lang === "ja" ? "家庭的なゲームスタイル、ドロー追い" : "Recreational, chases draws, soft sizing" },
+    { key: "intermediate", num: 3, name: state.lang === "ja" ? "インターミディエイト" : "Level 3 — Intermediate", desc: state.lang === "ja" ? "基本を理解、オッズ考慮" : "Understands basics, values pot odds" },
+    { key: "advanced", num: 4, name: state.lang === "ja" ? "アドバンスド" : "Level 4 — Advanced", desc: state.lang === "ja" ? "観察力のある、戦略的なアグレッシブ" : "Observant, controlled aggression" },
+    { key: "hard", num: 5, name: t("hard"), desc: state.lang === "ja" ? "規律正しく、高度なフォールド判断" : "Disciplined, strong value and fold logic" },
+    { key: "expert", num: 6, name: state.lang === "ja" ? "世界級エキスパート" : "World-Class Expert", desc: state.lang === "ja" ? "プロレベル、長期EV最大化" : "Professional, EV-focused mixed frequencies" }
+  ];
+
+  return `
+    <div class="flex-1 flex flex-col justify-between p-6 fade-in relative overflow-y-auto h-full">
+      <div>
+        <div class="flex items-center justify-between mb-6 pb-3 border-b border-neutral-900">
+          <h2 class="text-[11px] font-bold font-display text-neutral-200 uppercase tracking-widest">${state.lang === "ja" ? "AI難易度の選択" : "Select AI Difficulty"}</h2>
+          <button id="btn-diff-back" class="text-xs text-neutral-400 font-medium bg-neutral-900 py-1.5 px-3 rounded-md hover:text-white" onclick="changeScreen('playerCountSelect')">
+            ${t("back")}
+          </button>
+        </div>
+
+        <p class="text-xs text-neutral-400 mb-5 font-medium leading-relaxed">
+          ${state.lang === "ja" ? "対戦相手のAIの強さを選んでゲームを開始します" : "Choose the skill level of your AI opponents to start the tournament."}
+        </p>
+
+        <div class="flex flex-col gap-2.5 mb-6">
+          ${difficulties.map(diff => {
+            const active = state.difficulty === diff.key || (state.difficulty === "normal" && diff.key === "casual") || (state.difficulty === "pro" && diff.key === "expert");
+            return `
+              <button class="py-3 px-4 bg-[#0a0a0a] border ${active ? "border-amber-500 bg-amber-500/5 text-amber-500" : "border-neutral-900 text-neutral-300"} rounded-lg font-display hover:border-amber-500/50 transition-all text-left flex items-center justify-between cursor-pointer" onclick="confirmDifficultyAndStart('${diff.key}')">
+                <div class="flex-1 min-w-0 pr-2">
+                  <div class="font-bold flex items-center gap-1.5">
+                    <span class="text-[9px] text-amber-500 font-mono font-black border border-amber-500/30 px-1 py-0.5 rounded leading-none">LV.${diff.num}</span>
+                    <span class="text-xs tracking-wider">${diff.name}</span>
+                  </div>
+                  <div class="text-[9px] text-neutral-500 truncate mt-1.5">${diff.desc}</div>
+                </div>
+                <div class="w-5 h-5 rounded-full border border-neutral-850 flex items-center justify-center shrink-0 ${active ? "bg-amber-500 border-amber-500 text-neutral-950" : ""}">
+                  ${active ? `<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-check"><polyline points="20 6 9 17 4 12"/></svg>` : ""}
+                </div>
+              </button>
+            `;
+          }).join("")}
+        </div>
+      </div>
+
+      <div class="text-[10px] text-neutral-600 font-mono text-center tracking-widest mt-4">
+        WPT STANDARD BRACKET RUNNER
+      </div>
+    </div>
+  `;
+}
+
+window.changeScreen = function(screen) {
+  state.currentScreen = screen;
+  renderApp();
+};
+
+window.confirmDifficultyAndStart = function(diff) {
+  state.difficulty = diff;
+  localStorage.setItem("wpt_diff", diff);
+  startTournamentWith(state.playerCount);
+};
+
+window.selectPlayerCount = function(count) {
+  state.playerCount = count;
+  state.currentScreen = "difficultySelect";
+  renderApp();
+};
+
+window.toggleProbabilities = function() {
+  state.showProbabilities = !state.showProbabilities;
+  renderApp();
+};
+
+/**
+ * Detects draws post-flop
+ */
+function detectPostflopDraws(cards) {
+  const suits = { S: 0, H: 0, D: 0, C: 0 };
+  cards.forEach(c => suits[c.suit]++);
+  const hasFlushDraw = Object.values(suits).some(v => v === 4);
+  
+  const uniqueRanks = [...new Set(cards.map(c => c.rank))].sort((a,b) => a - b);
+  let hasStraightDraw = false;
+  if (uniqueRanks.length >= 4) {
+    for (let i = 0; i <= uniqueRanks.length - 4; i++) {
+      if (uniqueRanks[i+3] - uniqueRanks[i] === 3 || uniqueRanks[i+3] - uniqueRanks[i] === 4) {
+        hasStraightDraw = true;
+        break;
+      }
+    }
+  }
+  return { hasFlushDraw, hasStraightDraw };
+}
+
+/**
+ * Returns player position status
+ */
+function getPlayerPositionStatus(p) {
+  const tour = state.tour;
+  if (tour.dealerIdx === p.id) return "late";
+  if (tour.sbIdx === p.id || tour.bbIdx === p.id) return "early";
+  return "middle";
+}
+
+/**
+ * Estimate opponent strength based on current round actions
+ */
+function estimateOpponentStrength(opp) {
+  let est = 40;
+  if (!opp.actedThisRound) return est;
+  
+  if (opp.actionText && opp.actionText.includes(t("raise"))) {
+    est = 75;
+  } else if (opp.actionText === t("allin")) {
+    est = 90;
+  } else if (opp.actionText === t("call")) {
+    est = 55;
+  } else if (opp.actionText === t("check")) {
+    est = 35;
+  }
+  return est;
+}
+
+/**
  * WIN RATES TABLE OVERLAY
  */
 function renderSingleMatrixGrid(P) {
@@ -453,12 +607,12 @@ function renderSingleMatrixGrid(P) {
 
   // Header row: blank top-left corner, then A to 2 labels
   let colHeadersHtml = `
-    <tr class="bg-neutral-900 border-b border-neutral-800 text-[9px] font-bold select-none text-center">
-      <th class="p-0 border border-neutral-850 bg-neutral-950 font-display font-black text-amber-500 w-[22px] h-[22px] flex-shrink-0 text-center leading-none">
+    <tr class="bg-neutral-900 border-b border-neutral-800 text-[8px] font-bold select-none text-center">
+      <th class="p-0 border border-neutral-850 bg-neutral-950 font-display font-black text-amber-500 w-[17.5px] h-[17.5px] flex-shrink-0 text-center leading-none text-[8px]">
         ${P}P
       </th>
       ${RANKS.map(col => `
-        <th class="p-0 border border-neutral-850 text-amber-500 w-[22px] h-[22px] font-extrabold text-center leading-none">
+        <th class="p-0 border border-neutral-850 text-amber-500 w-[17.5px] h-[17.5px] font-extrabold text-center leading-none text-[8px]">
           ${col}
         </th>
       `).join("")}
@@ -471,7 +625,7 @@ function renderSingleMatrixGrid(P) {
     
     // Start row with vertical label (A down to 2)
     let cellsHtml = `
-      <td class="p-0 bg-neutral-950 border border-neutral-850 text-amber-500 font-extrabold text-[9px] text-center w-[22px] h-[22px] select-none leading-none">
+      <td class="p-0 bg-neutral-950 border border-neutral-850 text-amber-500 font-extrabold text-[8px] text-center w-[17.5px] h-[17.5px] select-none leading-none">
         ${rowRank}
       </td>
     `;
@@ -504,9 +658,9 @@ function renderSingleMatrixGrid(P) {
       let textClass = "";
 
       if (isTop30) {
-        textClass = "text-emerald-400 font-black animate-pulse-slow";
+        textClass = "text-emerald-400 font-extrabold animate-pulse-slow";
       } else if (isPocket) {
-        textClass = "text-amber-400/85 font-bold";
+        textClass = "text-amber-400/85 font-semibold";
       } else {
         textClass = "text-neutral-300";
       }
@@ -523,10 +677,10 @@ function renderSingleMatrixGrid(P) {
       }
 
       cellsHtml += `
-        <td class="p-0 text-center border ${borderStyle} ${cellBg} w-[22px] h-[22px]" title="${handKey}: ${val}%">
+        <td class="p-0 text-center border ${borderStyle} ${cellBg} w-[17.5px] h-[17.5px]" title="${handKey}: ${val}%">
           <div class="leading-none flex flex-col justify-center items-center h-full">
-            <span class="text-[5px] opacity-35 font-mono block tracking-tight select-none leading-none mb-0.5">${handKey}</span>
-            <span class="text-[7.5px] font-mono leading-none ${textClass}">${val}%</span>
+            <span class="text-[4px] opacity-35 font-mono block tracking-tighter select-none leading-none mb-[1px]">${handKey}</span>
+            <span class="text-[6.5px] font-mono leading-none ${textClass}">${val}%</span>
           </div>
         </td>
       `;
@@ -544,7 +698,7 @@ function renderSingleMatrixGrid(P) {
     : `${P}-Player Preflop Win Rate Matrix`;
 
   return `
-    <div class="mb-6 p-4 bg-[#0a0a0a] border border-neutral-900 rounded-xl shadow-xl flex-shrink-0">
+    <div class="mb-6 p-3 bg-[#0a0a0a] border border-neutral-900 rounded-xl shadow-xl flex-shrink-0">
       <div class="flex items-center justify-between mb-3.5 select-none">
         <h3 class="text-xs font-black tracking-wider text-neutral-200 uppercase font-display flex items-center gap-1.5 align-middle">
           <span class="w-1.5 h-1.5 rounded-full bg-amber-500 block animate-pulse"></span>
@@ -557,7 +711,7 @@ function renderSingleMatrixGrid(P) {
 
       <!-- Compact Matrix Table -->
       <div class="w-full rounded-lg border border-neutral-900 bg-[#040404] flex justify-center py-1.5 overflow-x-auto">
-        <table class="text-[9px] border-collapse" style="max-width: 100%; width: 308px;">
+        <table class="text-[8px] border-collapse" style="max-width: 100%; width: 245px;">
           <thead>
             ${colHeadersHtml}
           </thead>
@@ -676,7 +830,7 @@ function createPlayerCountScreenHtml() {
         <div class="grid grid-cols-2 gap-3.5 mb-6">
           ${[2, 3, 4, 5, 6].map(count => {
             return `
-              <button class="py-4 px-4 bg-neutral-900 border border-neutral-800 rounded-lg font-display font-semibold hover:border-amber-500/50 hover:text-amber-500 text-neutral-200 transition-colors" onclick="startTournamentWith(${count})">
+              <button class="py-4 px-4 bg-neutral-900 border border-neutral-800 rounded-lg font-display font-semibold hover:border-amber-500/50 hover:text-amber-500 text-neutral-200 transition-colors" onclick="selectPlayerCount(${count})">
                 <div class="text-xl">${count}-Max</div>
                 <div class="text-[10px] text-neutral-500 font-mono mt-0.5">${count === 2 ? "Heads-Up" : `6-Max Tournament`}</div>
               </button>
@@ -764,7 +918,7 @@ function createGameScreenHtml() {
           })()}
 
           <!-- COMMUNITY CARDS BAR -->
-          <div id="community-area" class="absolute top-[52%] flex items-center justify-center gap-1.5 z-10 w-full px-8">
+          <div id="community-area" class="absolute top-[38%] flex items-center justify-center z-10 w-full px-8">
             ${createCommunityCardsHtml()}
           </div>
 
@@ -792,27 +946,42 @@ function createGameScreenHtml() {
  */
 function createCommunityCardsHtml() {
   const comm = state.tour.community;
-  let html = "";
   
-  for (let i = 0; i < 5; i++) {
+  // Flop cards (index 0, 1, 2)
+  let flopHtml = "";
+  for (let i = 0; i < 3; i++) {
     const card = comm[i];
     if (card) {
-      const cls = SUIT_CLASS[card.suit];
-      const sym = SUIT_SYMBOL[card.suit];
-      html += `
-        <div class="wpt-card">
-          <div class="card-rank">${card.rankLabel}</div>
-          <div class="card-suit ${cls}">${sym}</div>
-        </div>
-      `;
+      flopHtml += renderStandardPlayingCard(card, "scale-100 select-none animate-deal-comm");
     } else {
-      // Empty card slot
-      html += `
-        <div class="w-[34px] h-[50px] border border-dashed border-neutral-800 rounded bg-[#050505]/40"></div>
-      `;
+      flopHtml += `<div class="w-[34px] h-[50px] border border-dashed border-neutral-800 rounded bg-[#050505]/40 select-none opacity-50 flex items-center justify-center text-[10px] text-neutral-700 font-mono font-bold">F</div>`;
     }
   }
-  return html;
+
+  // Turn & River cards (index 3 and 4)
+  let turnRiverHtml = "";
+  for (let i = 3; i < 5; i++) {
+    const card = comm[i];
+    if (card) {
+      turnRiverHtml += renderStandardPlayingCard(card, "scale-100 select-none animate-deal-comm");
+    } else {
+      const label = i === 3 ? "T" : "R";
+      turnRiverHtml += `<div class="w-[34px] h-[50px] border border-dashed border-neutral-800 rounded bg-[#050505]/40 select-none opacity-50 flex items-center justify-center text-[10px] text-neutral-700 font-mono font-bold">${label}</div>`;
+    }
+  }
+
+  return `
+    <div class="flex flex-col items-center gap-1.5 w-full">
+      <!-- Flop Row -->
+      <div class="flex items-center gap-1 justify-center">
+        ${flopHtml}
+      </div>
+      <!-- Turn & River Row -->
+      <div class="flex items-center gap-1 justify-center">
+        ${turnRiverHtml}
+      </div>
+    </div>
+  `;
 }
 
 /**
@@ -824,8 +993,13 @@ function renderSeatHoleCards(p) {
     return `<div class="h-[28px] mb-1"></div>`; // spacer to maintain structure
   }
 
-  // Show cards face up if stage is SHOWDOWN or RESULT, or if they are the Hero
-  const showFaceUp = tour.stage === "SHOWDOWN" || tour.stage === "RESULT" || p.isHero;
+  // Hide Hero table-side cards during play as required
+  if (p.isHero && tour.stage !== "SHOWDOWN" && tour.stage !== "RESULT") {
+    return `<div class="h-[28px] mb-1"></div>`;
+  }
+
+  // Show cards face up if stage is SHOWDOWN or RESULT
+  const showFaceUp = tour.stage === "SHOWDOWN" || tour.stage === "RESULT";
 
   if (showFaceUp) {
     const c1 = p.cards[0];
@@ -833,15 +1007,9 @@ function renderSeatHoleCards(p) {
     return `
       <div class="flex gap-0.5 mb-1 justify-center select-none animate-fade-in z-20">
         <!-- Card 1 -->
-        <div class="w-[20px] h-[28px] bg-white rounded border border-neutral-300 text-black flex flex-col items-center justify-center font-bold shadow-sm">
-          <div class="text-[8px] font-extrabold leading-none tracking-tighter">${c1.rankLabel}</div>
-          <div class="${SUIT_CLASS[c1.suit]} text-[11px] leading-none -mt-0.5">${SUIT_SYMBOL[c1.suit]}</div>
-        </div>
+        ${renderMiniPlayingCard(c1)}
         <!-- Card 2 -->
-        <div class="w-[20px] h-[28px] bg-white rounded border border-neutral-300 text-black flex flex-col items-center justify-center font-bold shadow-sm">
-          <div class="text-[8px] font-extrabold leading-none tracking-tighter">${c2.rankLabel}</div>
-          <div class="${SUIT_CLASS[c2.suit]} text-[11px] leading-none -mt-0.5">${SUIT_SYMBOL[c2.suit]}</div>
-        </div>
+        ${renderMiniPlayingCard(c2)}
       </div>
     `;
   } else {
@@ -853,6 +1021,30 @@ function renderSeatHoleCards(p) {
       </div>
     `;
   }
+}
+
+/**
+ * Return real-time confirmed hand description name
+ */
+function getConfirmedHandName(p) {
+  const tour = state.tour;
+  if (!p.cards || p.cards.length !== 2) return "";
+  const merged = [...p.cards, ...(tour.community || [])];
+  if (merged.length < 5) return "";
+  
+  const combos = getCombinations(merged, 5);
+  let bestScore = -1;
+  let bestEval = null;
+  
+  combos.forEach(c => {
+    const res = evaluate5CardHand(c);
+    if (res.type > bestScore) {
+      bestScore = res.type;
+      bestEval = res;
+    }
+  });
+  
+  return bestEval ? bestEval.typeName : "";
 }
 
 /**
@@ -904,12 +1096,24 @@ function createSeatsHtml() {
         ${renderSeatHoleCards(p)}
 
         <!-- PLAYER BADGE -->
-        <div class="relative w-20 bg-black/90 border ${isCurrentTurn ? "active-turn-ring border-amber-500 scale-102" : "border-[#222]"} rounded-lg p-1.5 flex flex-col items-center justify-center text-center shadow-lg transition-all z-10 animate-fade-in">
+        <div class="relative w-20 bg-black/95 border ${isCurrentTurn ? "active-turn-ring border-amber-500 scale-102" : "border-[#222]"} rounded-lg p-1.5 flex flex-col items-center justify-center text-center shadow-lg transition-all z-10 animate-fade-in">
           <div class="flex items-center gap-1 w-full justify-center max-w-full">
             <span class="inline-flex shrink-0 select-none">${getFlagHtml(p.flag)}</span>
             <span class="text-[9px] truncate font-extrabold max-w-[48px] ${p.isHero ? "text-amber-400" : "text-neutral-200"}">${p.isHero ? "Player" : p.name}</span>
           </div>
-          <div class="text-[9px] font-mono text-neutral-400 font-bold mt-0.5">$${p.stack}</div>
+          
+          <!-- Direct interactive active confirmed hand above chip stack in real-time -->
+          ${(() => {
+            const handName = getConfirmedHandName(p);
+            if (!handName) return "";
+            return `
+              <div class="text-[7px] font-black text-amber-500 uppercase tracking-tight leading-none mt-0.5 max-w-full truncate">
+                ${handName}
+              </div>
+            `;
+          })()}
+          
+          <div class="text-[9px] font-mono text-neutral-400 font-bold mt-1">$${p.stack}</div>
           
           <!-- Bet display -->
           ${p.totalBet > 0 ? `
@@ -929,13 +1133,13 @@ function createSeatsHtml() {
 }
 
 function getActionBgColorClass(col) {
-  const base = "action-bubble-wpt ";
+  const base = "action-bubble-wpt backdrop-blur-sm shadow-md border ";
   switch (col) {
-    case "red": return base + "bg-red-600 text-white";
-    case "gray": return base + "bg-gray-500 text-white";
-    case "green": return base + "bg-green-600 text-white";
-    case "yellow": return base + "bg-amber-500 text-neutral-950";
-    default: return base + "opacity-0 scale-90 pointer-events-none";
+    case "red": return base + "bg-red-950/45 text-red-400 border-red-500/35";
+    case "gray": return base + "bg-neutral-900/45 text-neutral-400 border-neutral-700/35";
+    case "green": return base + "bg-emerald-950/45 text-emerald-400 border-emerald-500/35";
+    case "yellow": return base + "bg-amber-950/45 text-amber-400 border-amber-500/35";
+    default: return "action-bubble-wpt opacity-0 scale-90 pointer-events-none";
   }
 }
 
@@ -958,16 +1162,21 @@ function createActionsControlHtml() {
     const winRate = PF_PROBS[pfKey] ? PF_PROBS[pfKey][idx] : 15; // default fallback 15%
     studyBlockHtml = `
       <div class="ml-2 flex flex-col justify-end">
-        <div class="text-[10px] text-gray-500 uppercase font-mono font-bold tracking-wider">My Hand</div>
-        <div class="text-xs sm:text-sm font-bold text-neutral-200">${pfKey} • ${totalCount}-Max</div>
-        <div class="text-base sm:text-lg font-black text-green-500">Win ${winRate}%</div>
+        <div class="flex items-center gap-1.5">
+          <div class="text-[10px] text-gray-500 uppercase font-mono font-bold tracking-wider">My Hand</div>
+          <button onclick="toggleProbabilities()" class="text-[8px] font-mono font-bold px-1.5 py-0.5 rounded leading-none transition-colors border ${state.showProbabilities ? 'bg-emerald-950/40 text-emerald-400 border-emerald-500/30' : 'bg-neutral-900 border-neutral-850 text-neutral-500'} cursor-pointer select-none">
+            ${state.showProbabilities ? 'ON' : 'OFF'}
+          </button>
+        </div>
+        <div class="text-xs sm:text-sm font-bold text-neutral-200 mt-1">${pfKey} • ${totalCount}-Max</div>
+        ${state.showProbabilities ? `<div class="text-sm font-black text-green-500 mt-0.5 leading-snug">Win ${winRate}%</div>` : `<div class="text-[10px] text-neutral-500 italic mt-1 font-mono leading-none">HIDDEN</div>`}
       </div>
     `;
   } else {
     studyBlockHtml = `
       <div class="ml-2 flex flex-col justify-end">
         <div class="text-[10px] text-gray-500 uppercase font-mono font-bold tracking-wider">My Hand</div>
-        <div class="text-xs sm:text-sm font-bold text-rose-500 italic">ELIMINATED</div>
+        <div class="text-xs sm:text-sm font-bold text-rose-500 italic mt-0.5">ELIMINATED</div>
       </div>
     `;
   }
@@ -981,15 +1190,9 @@ function createActionsControlHtml() {
     heroHoldemDeckHtml = `
       <div class="flex items-center gap-2.5">
         <!-- Card 1 -->
-        <div class="wpt-card scale-110 origin-bottom select-none animate-deal-l">
-          <div class="card-rank text-sm font-bold">${c1.rankLabel}</div>
-          <div class="card-suit text-xl ${SUIT_CLASS[c1.suit]}">${SUIT_SYMBOL[c1.suit]}</div>
-        </div>
+        ${renderStandardPlayingCard(c1, "scale-115 origin-bottom-right select-none animate-deal-l")}
         <!-- Card 2 -->
-        <div class="wpt-card scale-110 origin-bottom select-none animate-deal-r">
-          <div class="card-rank text-sm font-bold">${c2.rankLabel}</div>
-          <div class="card-suit text-xl ${SUIT_CLASS[c2.suit]}">${SUIT_SYMBOL[c2.suit]}</div>
-        </div>
+        ${renderStandardPlayingCard(c2, "scale-115 origin-bottom-left select-none animate-deal-r")}
       </div>
     `;
   } else {
@@ -1205,6 +1408,32 @@ function bindEvents() {
     state.currentScreen = "title";
     renderApp();
   });
+
+  const btnCopyHistory = document.getElementById("btn-copy-history");
+  if (btnCopyHistory) {
+    btnCopyHistory.addEventListener("click", () => {
+      const historyList = getHistory();
+      if (historyList.length === 0) return;
+      
+      const text = historyList.map((h, index) => {
+        return `Hand #${historyList.length - index}: ${h.hand} (${h.playersCount}-max) | Preflop Win: ${h.expectedRate}% | Result: ${h.result}`;
+      }).join("\n");
+      
+      navigator.clipboard.writeText(text).then(() => {
+        const originalText = btnCopyHistory.textContent;
+        btnCopyHistory.textContent = "COPIED!";
+        btnCopyHistory.classList.remove("bg-amber-500", "text-neutral-950");
+        btnCopyHistory.classList.add("bg-emerald-600", "text-white");
+        setTimeout(() => {
+          btnCopyHistory.textContent = originalText;
+          btnCopyHistory.classList.remove("bg-emerald-600", "text-white");
+          btnCopyHistory.classList.add("bg-amber-500", "text-neutral-950");
+        }, 1500);
+      }).catch(err => {
+        console.error("Failed to copy history:", err);
+      });
+    });
+  }
 
   // Count select screen
   const btnCountBack = document.getElementById("btn-count-back");
@@ -1855,59 +2084,212 @@ function executeCpuTurn(p) {
   const cardPower = getPlayerCardStrengthScore(p);
   const difficulty = state.difficulty;
   
-  // Decide action based on cards, difficulty, and pot situation
-  let decision = "CALL"; // fold, call/check, raise, allin
-  
-  // Custom bluff probabilities
-  let bluffProb = 0.05;
-  if (difficulty === "hard") bluffProb = 0.12;
-  if (difficulty === "pro") bluffProb = 0.22;
+  // Define comprehensive multi-tier profile configurations
+  const DIFF_PROFILES = {
+    beginner: {
+      bluffProb: 0.04,
+      randomness: 0.40,
+      mistakeProb: 0.30,
+      drawChasingProb: 0.90,
+      overvaluePairs: true,
+      callAggressionThreshold: 1.5
+    },
+    casual: {
+      bluffProb: 0.08,
+      randomness: 0.25,
+      mistakeProb: 0.20,
+      drawChasingProb: 0.70,
+      overvaluePairs: true,
+      callAggressionThreshold: 1.1
+    },
+    intermediate: {
+      bluffProb: 0.12,
+      randomness: 0.15,
+      mistakeProb: 0.10,
+      drawChasingProb: 0.45,
+      overvaluePairs: false,
+      callAggressionThreshold: 0.9
+    },
+    advanced: {
+      bluffProb: 0.18,
+      randomness: 0.08,
+      mistakeProb: 0.04,
+      drawChasingProb: 0.30,
+      overvaluePairs: false,
+      callAggressionThreshold: 0.75
+    },
+    hard: {
+      bluffProb: 0.24,
+      randomness: 0.03,
+      mistakeProb: 0.01,
+      drawChasingProb: 0.20,
+      overvaluePairs: false,
+      callAggressionThreshold: 0.65
+    },
+    expert: {
+      bluffProb: 0.32,
+      randomness: 0.0,
+      mistakeProb: 0.0,
+      drawChasingProb: 0.15,
+      overvaluePairs: false,
+      callAggressionThreshold: 0.55
+    }
+  };
+
+  let profile = DIFF_PROFILES[difficulty];
+  if (!profile) {
+    if (difficulty === "normal") profile = DIFF_PROFILES.casual;
+    else if (difficulty === "pro" || difficulty === "expert") profile = DIFF_PROFILES.expert;
+    else if (difficulty === "beginner") profile = DIFF_PROFILES.beginner;
+    else if (difficulty === "hard") profile = DIFF_PROFILES.hard;
+    else if (difficulty === "advanced") profile = DIFF_PROFILES.advanced;
+    else profile = DIFF_PROFILES.intermediate;
+  }
 
   // Active headcounts on high-level speedups
   const unfoldedCount = tour.players.filter(p1 => p1.isActive && !p1.isFolded).length;
-  if (unfoldedCount <= 3 && (difficulty === "hard" || difficulty === "pro")) {
-    // 2-3 Handed play naturally gets much more aggressive at scale
-    bluffProb += 0.15;
+
+  // Decide if this turn is a bluff
+  let isBluff = false;
+  if (cardPower === 0) {
+    let finalBluffProb = profile.bluffProb;
+    
+    // Position bonus
+    if (getPlayerPositionStatus(p) === "late") finalBluffProb += 0.08;
+    
+    // Opponent weakness: check if check-passive environment
+    if (callPrice <= 0) finalBluffProb += 0.10; 
+    
+    // Board texture: check if board is dry
+    if (tour.community.length >= 3) {
+      const suitsOnBoard = { S: 0, H: 0, D: 0, C: 0 };
+      tour.community.forEach(c => suitsOnBoard[c.suit]++);
+      const maxSuitCount = Math.max(...Object.values(suitsOnBoard));
+      if (maxSuitCount < 3) finalBluffProb += 0.05; // dry board -> more bluffs
+    }
+    
+    isBluff = Math.random() < finalBluffProb;
   }
 
-  const isBluff = Math.random() < bluffProb;
+  // Handle randomness overlay (e.g. beginner clicks random actions)
+  let decision = "CALL";
+  let actedRandomly = false;
+  if (Math.random() < profile.randomness) {
+    actedRandomly = true;
+    const randVal = Math.random();
+    if (randVal < 0.5) decision = "CALL";
+    else if (randVal < 0.7) decision = "RAISE";
+    else decision = callPrice === 0 ? "CALL" : "FOLD";
+  }
 
-  // Decision formulation
-  if (tour.stage === "PREFLOP") {
-    // Preflop relies strictly on Hand Expectation Table
-    const pfKey = getPreflopHandKey(p.cards);
-    const winRate = PF_PROBS[pfKey] ? PF_PROBS[pfKey][0] : 18; // default fallback
-    
-    if (winRate > 62) {
-      decision = Math.random() < 0.4 ? "RAISE" : "CALL";
-    } else if (winRate > 44) {
-      decision = Math.random() < 0.2 ? "RAISE" : "CALL";
-    } else if (winRate > 28) {
-      decision = "CALL";
-    } else {
-      decision = isBluff ? "CALL" : "FOLD";
-    }
+  if (!actedRandomly) {
+    // Street based strategy logic
+    if (tour.stage === "PREFLOP") {
+      const pfKey = getPreflopHandKey(p.cards);
+      const winRatesForSeating = PF_PROBS[pfKey];
+      // Lookup winRate based on dynamic playersCount
+      const idx = Math.max(0, Math.min(4, unfoldedCount - 2));
+      const winRate = winRatesForSeating ? winRatesForSeating[idx] : 18;
 
-    // Force fold extremely weak preflop hand if high raise happened
-    if (callPrice > tour.bbSize * 2 && winRate < 35 && !isBluff) {
-      decision = "FOLD";
-    }
-  } else {
-    // Postflop relies on evaluate5CardHand cardPower ranges
-    // cardPower: 0(High) to 9(Royal)
-    if (cardPower >= 3) {
-      // 3-Card or above is high value
-      decision = Math.random() < 0.55 ? "RAISE" : "CALL";
-    } else if (cardPower >= 1) {
-      // One/Two Pair
-      if (callPrice > p.stack * 0.4) {
-        decision = Math.random() < 0.3 ? "CALL" : "FOLD";
-      } else {
+      if (winRate > 62) {
+        // Elite hands: AA, KK, QQ, JJ, AKs
+        decision = Math.random() < 0.65 ? "RAISE" : "CALL";
+      } else if (winRate > 44) {
+        // Strong hands: AQ, AJ, TT, 99
+        decision = Math.random() < 0.35 ? "RAISE" : "CALL";
+      } else if (winRate > 28) {
+        // Playable hands: mid pairs, suited connectors
         decision = "CALL";
+      } else {
+        // Weak hands
+        decision = isBluff ? "CALL" : "FOLD";
+      }
+
+      // Check for mistake: Beginner or Casual occasionally calls large raises with garbage
+      if (Math.random() < profile.mistakeProb && winRate < 28) {
+        decision = "CALL"; // chasing with low hands
+      }
+
+      // POSITIONAL AWARENESS: Expand late position response
+      if (getPlayerPositionStatus(p) === "late" && callPrice <= 0 && winRate > 35) {
+        // Late raise
+        decision = Math.random() < 0.50 ? "RAISE" : "CALL";
+      }
+
+      // Force fold weak preflop hand if high raise occurred
+      if (callPrice > tour.bbSize * 1.5 && winRate < 35 && !isBluff) {
+        decision = "FOLD";
       }
     } else {
-      // Low card draws
-      decision = (isBluff && Math.random() < 0.4) ? "RAISE" : (callPrice === 0 ? "CALL" : "FOLD");
+      // POSTFLOP (FLOP, TURN, RIVER)
+      const mergedCards = [...p.cards, ...tour.community];
+      const draws = detectPostflopDraws(mergedCards);
+      
+      // Opponent modeling estimation
+      let activeOpponents = tour.players.filter(po => po.id !== p.id && po.isActive && !po.isFolded);
+      let highestOpponentStrength = 40;
+      activeOpponents.forEach(ao => {
+        const est = estimateOpponentStrength(ao);
+        if (est > highestOpponentStrength) highestOpponentStrength = est;
+      });
+
+      if (cardPower >= 5) {
+        // Elite holdings: Flush, Full House, Quads or better
+        // Value bet sizing / trapping
+        decision = Math.random() < 0.70 ? "RAISE" : "CALL";
+      } else if (cardPower >= 3) {
+        // Strong holdings: Straight, Three of a Kind
+        if (highestOpponentStrength >= 75) {
+          // Cautious but mostly stays
+          decision = "CALL";
+        } else {
+          decision = Math.random() < 0.50 ? "RAISE" : "CALL";
+        }
+      } else if (cardPower >= 1) {
+        // Moderate holdings: One Pair or Two Pair
+        if (profile.overvaluePairs) {
+          // Beginner or Casual overcommits
+          decision = "CALL";
+        } else {
+          // Mathematical fold response
+          if (callPrice > p.stack * profile.callAggressionThreshold) {
+            decision = "FOLD";
+          } else {
+            // Check board wetness or raise threats
+            if (highestOpponentStrength >= 75 && callPrice > tour.bbSize * 2) {
+              decision = Math.random() < 0.25 ? "CALL" : "FOLD";
+            } else {
+              decision = "CALL";
+            }
+          }
+        }
+      } else {
+        // Weak cardPower = 0 (draws or pure bluff)
+        const isChasingDraw = (draws.hasFlushDraw || draws.hasStraightDraw) && (Math.random() < profile.drawChasingProb);
+        
+        if (isChasingDraw) {
+          // Call reasonable prices for draws
+          if (callPrice <= tour.bbSize * 4) {
+            decision = "CALL";
+          } else {
+            decision = "FOLD";
+          }
+        } else if (isBluff) {
+          // Bluffing raise
+          decision = "RAISE";
+        } else {
+          decision = callPrice === 0 ? "CALL" : "FOLD";
+        }
+      }
+
+      // Emotional mistakes triggers: loose/aggressive mistake triggers
+      if (Math.random() < profile.mistakeProb) {
+        if (Math.random() < 0.5) {
+          decision = "CALL"; // chases blindly
+        } else if (callPrice === 0) {
+          decision = "RAISE"; // emotional aggressive bet
+        }
+      }
     }
   }
 

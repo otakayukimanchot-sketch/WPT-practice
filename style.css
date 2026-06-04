@@ -70,10 +70,6 @@ body {
   font-weight: bold;
   width: 34px;
   height: 50px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
   transition: transform 0.15s ease-out;
 }
@@ -138,6 +134,15 @@ body {
 }
 .btn-action-wpt-check:active {
   background-color: #3f3f46;
+}
+
+.btn-action-wpt-call {
+  background-color: rgba(30, 58, 138, 0.4);
+  border: 1px solid rgb(59, 130, 246);
+  color: rgb(147, 197, 253);
+}
+.btn-action-wpt-call:active {
+  background-color: rgba(30, 58, 138, 0.6);
 }
 
 .btn-action-wpt-raise {
