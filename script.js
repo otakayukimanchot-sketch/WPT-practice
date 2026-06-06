@@ -17,7 +17,7 @@ const TRANSLATIONS = {
     normal: "ノーマル (普通)",
     hard: "ハード (上級)",
     pro: "プロ (手強い)",
-    handHistory: "ハンド履歴 (最大1000件分)",
+    handHistory: "ハンド履歴 (最大500件分)",
     noHistory: "履歴がありません。プレイを開始してください。",
     expectedWin: "想定プリフロップ勝率",
     actualResult: "結果",
@@ -61,7 +61,7 @@ const TRANSLATIONS = {
     normal: "Normal",
     hard: "Hard",
     pro: "Pro",
-    handHistory: "Hand History (Last 1000 hands)",
+    handHistory: "Hand History (Last 500 hands)",
     noHistory: "No history found. Start playing to log results.",
     expectedWin: "Expected Preflop Win",
     actualResult: "Result",
@@ -226,7 +226,7 @@ function renderApp() {
  */
 function createTitleScreenHtml() {
   const currentUrl = window.location.href;
-  const qrCodeUrl = `./src/assets/images/app_qr_code_1780558124495.png`;
+  const qrCodeUrl = `./src/assets/images/app_qr_code_1780764264715.png`;
 
   let shareOverlayHtml = "";
   if (state.showShareOverlay) {
@@ -581,11 +581,27 @@ function estimateOpponentStrength(opp) {
 /**
  * WIN RATES TABLE OVERLAY
  */
+function getPreflopWinRate(handKey, P) {
+  const probs = PF_PROBS[handKey];
+  if (!probs) return 0;
+  if (P <= 6) {
+    return (probs[P - 2] !== undefined) ? probs[P - 2] : 0;
+  }
+  const val6 = (probs[4] !== undefined) ? probs[4] : 15;
+  if (P === 7) {
+    return Math.max(1, Math.round(val6 * 0.90));
+  } else if (P === 8) {
+    return Math.max(1, Math.round(val6 * 0.82));
+  } else if (P === 9) {
+    return Math.max(1, Math.round(val6 * 0.75));
+  }
+  return 0;
+}
+
 function renderSingleMatrixGrid(P) {
   const RANKS = ["A", "K", "Q", "J", "T", "9", "8", "7", "6", "5", "4", "3", "2"];
-  const idx = P - 2; // 2P is index 0, 3P is index 1, etc.
   
-  // Dynamic top 30 calculations for this table (P)
+  // Dynamic top 40 calculations for this table (P)
   const allCombinations = [];
   for (let r = 0; r < RANKS.length; r++) {
     for (let c = 0; c < RANKS.length; c++) {
@@ -597,13 +613,12 @@ function renderSingleMatrixGrid(P) {
       } else {
         key = RANKS[c] + RANKS[r] + "o";
       }
-      const probs = PF_PROBS[key];
-      const val = (probs && probs[idx] !== undefined) ? probs[idx] : 0;
+      const val = getPreflopWinRate(key, P);
       allCombinations.push({ key, val });
     }
   }
   allCombinations.sort((a, b) => b.val - a.val);
-  const top30Set = new Set(allCombinations.slice(0, 30).map(item => item.key));
+  const top40Set = new Set(allCombinations.slice(0, 40).map(item => item.key));
 
   // Header row: blank top-left corner, then A to 2 labels
   let colHeadersHtml = `
@@ -633,12 +648,10 @@ function renderSingleMatrixGrid(P) {
     for (let c = 0; c < RANKS.length; c++) {
       const colRank = RANKS[c];
       let handKey = "";
-      let isPocket = false;
       let isSuited = false;
 
       if (r === c) {
         handKey = rowRank + rowRank;
-        isPocket = true;
       } else if (r < c) {
         // Upper-right side: Suited
         handKey = rowRank + colRank + "s";
@@ -648,27 +661,21 @@ function renderSingleMatrixGrid(P) {
         handKey = colRank + rowRank + "o";
       }
 
-      const probs = PF_PROBS[handKey];
-      const val = (probs && probs[idx] !== undefined) ? probs[idx] : 0;
-      const isTop30 = top30Set.has(handKey);
+      const val = getPreflopWinRate(handKey, P);
+      const isTop40 = top40Set.has(handKey);
 
       // Color backgrounds based on value and hands type
       let cellBg = "";
       let borderStyle = "border-neutral-900";
       let textClass = "";
 
-      if (isTop30) {
+      if (isTop40) {
         textClass = "text-emerald-400 font-extrabold animate-pulse-slow";
-      } else if (isPocket) {
-        textClass = "text-amber-400/85 font-semibold";
       } else {
         textClass = "text-neutral-300";
       }
 
-      if (isPocket) {
-        cellBg = "bg-amber-500/10";
-        borderStyle = "border-amber-500/20";
-      } else if (isSuited) {
+      if (isSuited) {
         cellBg = "bg-neutral-900/30";
         borderStyle = "border-neutral-850/40";
       } else {
@@ -736,13 +743,16 @@ function createWinRatesOverlayHtml() {
     { id: 3, ja: "3人 (3P)", en: "3 Players" },
     { id: 4, ja: "4人 (4P)", en: "4 Players" },
     { id: 5, ja: "5人 (5P)", en: "5 Players" },
-    { id: 6, ja: "6人 (6P)", en: "6 Players" }
+    { id: 6, ja: "6人 (6P)", en: "6 Players" },
+    { id: 7, ja: "7人 (7P)", en: "7 Players" },
+    { id: 8, ja: "8人 (8P)", en: "8 Players" },
+    { id: 9, ja: "9人 (9P)", en: "9 Players" }
   ];
 
   // Compile active grids
   let gridsHtml = "";
   if (state.winRatesPlayersCount === "all") {
-    gridsHtml = [2, 3, 4, 5, 6].map(count => renderSingleMatrixGrid(count)).join("");
+    gridsHtml = [2, 3, 4, 5, 6, 7, 8, 9].map(count => renderSingleMatrixGrid(count)).join("");
   } else {
     gridsHtml = renderSingleMatrixGrid(Number(state.winRatesPlayersCount));
   }
@@ -753,7 +763,7 @@ function createWinRatesOverlayHtml() {
       <div class="flex items-center justify-between mb-4 pb-3 border-b border-neutral-900 flex-shrink-0">
         <div>
           <h2 class="text-sm font-black tracking-wider text-amber-500 uppercase font-display">${state.lang === "ja" ? "人数別プリフロップ勝率一覧" : "Preflop Win Rates by Player Count"}</h2>
-          <p class="text-[9px] text-neutral-500 font-mono mt-0.5">${state.lang === "ja" ? "2人〜6人のスターティングハンド勝率マトリクス" : "Preflop win probabilities grids for 2 to 6 players"}</p>
+          <p class="text-[9px] text-neutral-500 font-mono mt-0.5">${state.lang === "ja" ? "2人〜9人のスターティングハンド勝率マトリクス" : "Preflop win probabilities grids for 2 to 9 players"}</p>
         </div>
         <button id="btn-close-win-rates" class="text-xs text-neutral-400 font-medium bg-neutral-900 hover:bg-neutral-850 py-1.5 px-3 rounded-md hover:text-white transition-colors">
           ${t("back")}
@@ -761,14 +771,14 @@ function createWinRatesOverlayHtml() {
       </div>
 
       <!-- TABS SELECTOR -->
-      <div class="flex-shrink-0 mb-4 bg-neutral-900/50 p-1 rounded-lg border border-neutral-900">
-        <div class="grid grid-cols-6 gap-1">
+      <div class="flex-shrink-0 mb-4 bg-neutral-900/50 p-1.5 rounded-lg border border-neutral-900">
+        <div class="flex flex-wrap gap-1 justify-center max-h-[85px] overflow-y-auto w-full">
           ${availableFilters.map(tab => {
             const label = state.lang === "ja" ? tab.ja : tab.en;
             const active = state.winRatesPlayersCount === tab.id || (state.winRatesPlayersCount === "all" && tab.id === "all");
             return `
               <button 
-                class="text-[9px] py-1.5 px-0.5 rounded font-black font-sans transition-colors tracking-tight ${active ? "bg-amber-500 text-neutral-950" : "text-neutral-400 hover:text-neutral-200"}"
+                class="text-[7.5px] py-1 px-1.5 rounded font-black font-sans transition-colors tracking-tight ${active ? "bg-amber-500 text-neutral-950 font-bold" : "text-neutral-400 hover:text-neutral-200 bg-neutral-950/50"}"
                 onclick="window.handleWinRatesPlayerTab('${tab.id}')"
               >
                 ${label}
@@ -781,10 +791,6 @@ function createWinRatesOverlayHtml() {
       <!-- LEGEND / INFORMATION BAR -->
       <div class="flex-shrink-0 mb-4 flex flex-wrap justify-center gap-x-4 gap-y-2 bg-neutral-900/30 p-2.5 rounded-lg border border-neutral-900 text-[9px] select-none font-mono text-center">
         <div class="flex items-center gap-1.5">
-          <span class="w-3.5 h-3.5 rounded bg-amber-500/10 border border-amber-500/20 inline-block shrink-0"></span>
-          <span class="text-neutral-300 font-semibold">${state.lang === "ja" ? "対角線: ポケット" : "Diagonal: Pairs"}</span>
-        </div>
-        <div class="flex items-center gap-1.5">
           <span class="w-3.5 h-3.5 rounded bg-neutral-900/30 border border-neutral-850/40 inline-block shrink-0"></span>
           <span class="text-neutral-300 font-semibold">${state.lang === "ja" ? "右上: スーテッド" : "Upper-Right: Suited"}</span>
         </div>
@@ -794,7 +800,7 @@ function createWinRatesOverlayHtml() {
         </div>
         <div class="flex items-center gap-1.5">
           <span class="text-emerald-400 font-black text-xs shrink-0">●</span>
-          <span class="text-emerald-400 font-bold">${state.lang === "ja" ? "緑字: 各テーブルの上位30ハンド" : "Green: Top 30 Win Rates"}</span>
+          <span class="text-emerald-400 font-bold">${state.lang === "ja" ? "緑字: 各テーブルの上位40ハンド" : "Green: Top 40 Win Rates"}</span>
         </div>
       </div>
 
@@ -818,28 +824,35 @@ function createPlayerCountScreenHtml() {
   return `
     <div class="flex-1 flex flex-col justify-between p-6 fade-in relative">
       <div>
-        <div class="flex items-center justify-between mb-8 pb-3 border-b border-neutral-900">
+        <div class="flex items-center justify-between mb-6 pb-3 border-b border-neutral-900">
           <h2 class="text-lg font-bold font-display text-neutral-200">${t("start")}</h2>
           <button id="btn-count-back" class="text-xs text-neutral-400 font-medium bg-neutral-900 py-1.5 px-3 rounded-md hover:text-white">
             ${t("back")}
           </button>
         </div>
 
-        <p class="text-xs text-neutral-400 mb-6 font-medium">${t("selectPlayersCount")}</p>
+        <p class="text-xs text-neutral-400 mb-4 font-medium">${t("selectPlayersCount")}</p>
 
-        <div class="grid grid-cols-2 gap-3.5 mb-6">
-          ${[2, 3, 4, 5, 6].map(count => {
+        <div class="grid grid-cols-1 gap-1.5 mb-6 max-h-[290px] overflow-y-auto pr-1">
+          ${[2, 3, 4, 5, 6, 7, 8, 9].map(count => {
+            const desc = count === 2 
+              ? "Heads-Up" 
+              : count === 6 
+                ? "6-Max Tournament" 
+                : count === 9 
+                  ? "9-Max Full Ring Tournament" 
+                  : `${count}-Max Tournament`;
             return `
-              <button class="py-4 px-4 bg-neutral-900 border border-neutral-800 rounded-lg font-display font-semibold hover:border-amber-500/50 hover:text-amber-500 text-neutral-200 transition-colors" onclick="selectPlayerCount(${count})">
-                <div class="text-xl">${count}-Max</div>
-                <div class="text-[10px] text-neutral-500 font-mono mt-0.5">${count === 2 ? "Heads-Up" : `6-Max Tournament`}</div>
+              <button class="py-2 px-3 bg-neutral-900 border border-neutral-800 rounded-lg font-display font-semibold hover:border-amber-500/50 hover:text-amber-500 text-neutral-200 transition-colors flex items-center justify-between" onclick="selectPlayerCount(${count})">
+                <span class="text-sm font-extrabold">${count}-Max</span>
+                <span class="text-[9px] text-neutral-500 font-mono">${desc}</span>
               </button>
             `;
           }).join("")}
         </div>
 
         <!-- VIEW WIN RATES BY NUMBER OF PLAYERS BUTTON -->
-        <button id="btn-view-win-rates" class="w-full py-3.5 px-4 bg-neutral-900 border border-neutral-850 hover:border-amber-500/30 text-amber-500 hover:text-amber-400 font-bold rounded-lg text-xs tracking-wider transition-colors uppercase font-mono flex items-center justify-center gap-2">
+        <button id="btn-view-win-rates" class="w-full py-3 px-4 bg-neutral-900 border border-neutral-850 hover:border-amber-500/30 text-amber-500 hover:text-amber-400 font-bold rounded-lg text-xs tracking-wider transition-colors uppercase font-mono flex items-center justify-center gap-2">
           <svg class="lucide lucide-bar-chart-2" xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
           ${t("viewWinRates")}
         </button>
@@ -885,8 +898,8 @@ function createGameScreenHtml() {
       </div>
 
       <!-- TABLE AREA CONTAINER -->
-      <div class="flex-1 relative flex flex-col justify-center my-3 max-h-[300px] min-h-[250px] select-none px-2">
-        <div id="wpt-table-felt" class="wpt-poker-table-outer w-full h-[225px] flex flex-col justify-center items-center relative">
+      <div class="flex-1 relative flex flex-col justify-center my-3 max-h-[355px] min-h-[280px] select-none px-2">
+        <div id="wpt-table-felt" class="wpt-poker-table-outer w-full h-[265px] flex flex-col justify-center items-center relative">
           <!-- Decorative interior oval line -->
           <div class="absolute inset-[24px] border border-neutral-900/10 rounded-[90px] pointer-events-none"></div>
 
@@ -1050,16 +1063,90 @@ function getConfirmedHandName(p) {
 /**
  * Render player positions
  */
+function getSeatPositions(count) {
+  if (count === 2) {
+    return [
+      { bottom: "-10px", left: "50%", transform: "translateX(-50%)" }, // Seat 0 (Hero, Bottom)
+      { top: "-10px", left: "50%", transform: "translateX(-50%)" }     // Seat 1 (CPU, Top)
+    ];
+  }
+  if (count === 3) {
+    return [
+      { bottom: "-10px", left: "50%", transform: "translateX(-50%)" }, // Bottom
+      { top: "60px", left: "4px" },                                   // Left
+      { top: "60px", right: "4px" }                                   // Right
+    ];
+  }
+  if (count === 4) {
+    return [
+      { bottom: "-10px", left: "50%", transform: "translateX(-50%)" }, // Bottom
+      { top: "45%", left: "4px", transform: "translateY(-50%)" },      // Left
+      { top: "-10px", left: "50%", transform: "translateX(-50%)" },    // Top
+      { top: "45%", right: "4px", transform: "translateY(-50%)" }      // Right
+    ];
+  }
+  if (count === 5) {
+    return [
+      { bottom: "-10px", left: "50%", transform: "translateX(-50%)" }, // Bottom
+      { bottom: "50px", left: "4px" },                                 // Left Lower
+      { top: "45px", left: "4px" },                                    // Left Higher
+      { top: "45px", right: "4px" },                                   // Right Higher
+      { bottom: "50px", right: "4px" }                                 // Right Lower
+    ];
+  }
+  if (count === 6) {
+    return [
+      { bottom: "-10px", left: "50%", transform: "translateX(-50%)" }, // Bottom (Hero)
+      { bottom: "45px", left: "4px" },                                 // Left Lower
+      { top: "45px", left: "4px" },                                    // Left Higher
+      { top: "-10px", left: "50%", transform: "translateX(-50%)" },    // Top Central
+      { top: "45px", right: "4px" },                                   // Right Higher
+      { bottom: "45px", right: "4px" }                                 // Right Lower
+    ];
+  }
+  if (count === 7) {
+    return [
+      { bottom: "-10px", left: "50%", transform: "translateX(-50%)" }, // Bottom
+      { bottom: "35px", left: "4px" },                                 // Left Lower
+      { top: "50px", left: "4px" },                                    // Left Higher
+      { top: "-10px", left: "30%", transform: "translateX(-50%)" },    // Top Left
+      { top: "-10px", left: "70%", transform: "translateX(-50%)" },    // Top Right
+      { top: "50px", right: "4px" },                                   // Right Higher
+      { bottom: "35px", right: "4px" }                                 // Right Lower
+    ];
+  }
+  if (count === 8) {
+    return [
+      { bottom: "-10px", left: "50%", transform: "translateX(-50%)" }, // Bottom
+      { bottom: "30px", left: "4px" },                                 // Left Lower
+      { top: "45%", left: "4px", transform: "translateY(-50%)" },      // Left Middle
+      { top: "40px", left: "15%" },                                    // Left Higher-ish
+      { top: "-10px", left: "50%", transform: "translateX(-50%)" },    // Top Central
+      { top: "40px", right: "15%" },                                   // Right Higher-ish
+      { top: "45%", right: "4px", transform: "translateY(-50%)" },     // Right Middle
+      { bottom: "30px", right: "4px" }                                 // Right Lower
+    ];
+  }
+  // Default and 9 players!
+  return [
+    { bottom: "-10px", left: "50%", transform: "translateX(-50%)" }, // 0: Bottom
+    { bottom: "25px", left: "4px" },                                 // 1: Lower Left
+    { top: "45%", left: "4px", transform: "translateY(-50%)" },      // 2: Middle Left
+    { top: "25px", left: "12%" },                                    // 3: Upper Left
+    { top: "-10px", left: "33%", transform: "translateX(-50%)" },    // 4: Top Left-Center
+    { top: "-10px", left: "67%", transform: "translateX(-50%)" },    // 5: Top Right-Center
+    { top: "25px", right: "12%" },                                   // 6: Upper Right
+    { top: "45%", right: "4px", transform: "translateY(-50%)" },     // 7: Middle Right
+    { bottom: "25px", right: "4px" }                                 // 8: Lower Right
+  ];
+}
+
+/**
+ * Render player positions
+ */
 function createSeatsHtml() {
   const tour = state.tour;
-  const positions = [
-    { bottom: "-12px", left: "50%", transform: "translateX(-50%)" }, // Seat 0 (Bottom, Hero)
-    { bottom: "35px", left: "4px", transform: "none" },            // Seat 1 (Left Lower)
-    { top: "35px", left: "4px", transform: "none" },               // Seat 2 (Left Higher)
-    { top: "-12px", left: "50%", transform: "translateX(-50%)" },   // Seat 3 (Top Central)
-    { top: "35px", right: "4px", transform: "none" },              // Seat 4 (Right Higher)
-    { bottom: "35px", right: "4px", transform: "none" }            // Seat 5 (Right Lower)
-  ];
+  const positions = getSeatPositions(state.playerCount);
 
   let html = "";
   
@@ -1081,9 +1168,16 @@ function createSeatsHtml() {
     else if (hasSB) btnBadge = `<div class="absolute -top-1.5 -right-1.5 bg-gray-600 text-white text-[9px] rounded-full w-4 h-4 flex items-center justify-center font-black shadow-lg select-none z-10">SB</div>`;
     else if (hasBB) btnBadge = `<div class="absolute -top-1.5 -right-1.5 bg-gray-800 text-white text-[9px] rounded-full w-4 h-4 flex items-center justify-center font-black shadow-lg select-none z-10">BB</div>`;
 
-    // Upper half seats [2, 3, 4] get bubble below; lower half [0, 1, 5] get bubble above
-    const isUpper = [2, 3, 4].includes(p.seatIndex);
+    // Visual bubble pos
+    const isUpper = !!pos.top;
     const bubblePosClass = isUpper ? "bottom-[-20px] left-1/2 -translate-x-1/2" : "top-[-20px] left-1/2 -translate-x-1/2";
+
+    const isLargeTable = state.playerCount > 6;
+    const badgeWidth = isLargeTable ? "w-[66px]" : "w-[72px]";
+    const badgePadding = isLargeTable ? "p-1" : "p-1.5";
+    const nameSize = isLargeTable ? "text-[8px]" : "text-[8.5px]";
+    const stackSize = isLargeTable ? "text-[8px]" : "text-[8.5px]";
+    const betSize = isLargeTable ? "text-[7.5px]" : "text-[8px]";
 
     html += `
       <div class="absolute flex flex-col items-center pointer-events-auto animate-fade-in" style="bottom:${pos.bottom || 'auto'}; top:${pos.top || 'auto'}; left:${pos.left || 'auto'}; right:${pos.right || 'auto'}; transform:${pos.transform || 'none'};">
@@ -1096,10 +1190,10 @@ function createSeatsHtml() {
         ${renderSeatHoleCards(p)}
 
         <!-- PLAYER BADGE -->
-        <div class="relative w-20 bg-black/95 border ${isCurrentTurn ? "active-turn-ring border-amber-500 scale-102" : "border-[#222]"} rounded-lg p-1.5 flex flex-col items-center justify-center text-center shadow-lg transition-all z-10 animate-fade-in">
+        <div class="relative ${badgeWidth} bg-black/95 border ${isCurrentTurn ? "active-turn-ring border-amber-500 scale-102" : "border-[#222]"} rounded-lg ${badgePadding} flex flex-col items-center justify-center text-center shadow-lg transition-all z-10 animate-fade-in">
           <div class="flex items-center gap-1 w-full justify-center max-w-full">
             <span class="inline-flex shrink-0 select-none">${getFlagHtml(p.flag)}</span>
-            <span class="text-[9px] truncate font-extrabold max-w-[48px] ${p.isHero ? "text-amber-400" : "text-neutral-200"}">${p.isHero ? "Player" : p.name}</span>
+            <span class="${nameSize} truncate font-extrabold max-w-[44px] ${p.isHero ? "text-amber-400" : "text-neutral-200"}">${p.isHero ? "Player" : p.name}</span>
           </div>
           
           <!-- Direct interactive active confirmed hand above chip stack in real-time -->
@@ -1107,17 +1201,17 @@ function createSeatsHtml() {
             const handName = getConfirmedHandName(p);
             if (!handName) return "";
             return `
-              <div class="text-[7px] font-black text-amber-500 uppercase tracking-tight leading-none mt-0.5 max-w-full truncate">
+              <div class="text-[6.5px] font-black text-amber-500 uppercase tracking-tight leading-none mt-0.5 max-w-full truncate">
                 ${handName}
               </div>
             `;
           })()}
           
-          <div class="text-[9px] font-mono text-neutral-400 font-bold mt-1">$${p.stack}</div>
+          <div class="${stackSize} font-mono text-neutral-400 font-bold mt-1">$${p.stack}</div>
           
           <!-- Bet display -->
           ${p.totalBet > 0 ? `
-            <div class="text-[8px] font-mono text-amber-500 font-bold mt-0.5 flex items-center justify-center gap-0.5 bg-neutral-950/80 px-1 rounded-sm w-full select-none border border-neutral-800">
+            <div class="${betSize} font-mono text-amber-500 font-bold mt-0.5 flex items-center justify-center gap-0.5 bg-neutral-950/80 px-1 rounded-sm w-full select-none border border-neutral-800">
               <span>$${p.totalBet}</span>
             </div>
           ` : ""}
@@ -1651,19 +1745,8 @@ function nextHand() {
     heroPlayer.seatIndex = 0;
   }
 
-  // Get available visual indices for CPU positions based on playerCount
-  let cpuSeats = [];
-  if (state.playerCount === 2) {
-    cpuSeats = [3];
-  } else if (state.playerCount === 3) {
-    cpuSeats = [2, 4];
-  } else if (state.playerCount === 4) {
-    cpuSeats = [1, 3, 5];
-  } else if (state.playerCount === 5) {
-    cpuSeats = [1, 2, 4, 5];
-  } else {
-    cpuSeats = [1, 2, 3, 4, 5];
-  }
+  // Get available visual indices for CPU positions based on playerCount (1 to playerCount-1)
+  let cpuSeats = Array.from({ length: state.playerCount - 1 }, (_, i) => i + 1);
   // Shuffle cpuSeats
   cpuSeats = cpuSeats.sort(() => 0.5 - Math.random());
 
@@ -2884,8 +2967,8 @@ function saveHandResultToHistory(cards, isWin) {
   const history = getHistory();
   history.unshift(record);
   
-  // Cap at 1000 records for storing a much larger history
-  if (history.length > 1000) {
+  // Cap at 500 records for storing a much larger history
+  if (history.length > 500) {
     history.pop();
   }
 
