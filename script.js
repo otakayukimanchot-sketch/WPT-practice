@@ -8,7 +8,7 @@ const TRANSLATIONS = {
   ja: {
     start: "トーナメント開始",
     settings: "各種設定",
-    historyButton: "ハンド履歴",
+    historyButton: "人数別勝率表 / ハンド履歴",
     back: "戻る",
     selectPlayersCount: "初期プレイヤー人数を選択してください",
     difficulty: "AI難易度",
@@ -52,7 +52,7 @@ const TRANSLATIONS = {
   en: {
     start: "Start Game",
     settings: "Settings",
-    historyButton: "History",
+    historyButton: "Win Rates / Hand History",
     back: "Back",
     selectPlayersCount: "Select Initial Player Count",
     difficulty: "AI Difficulty",
@@ -147,6 +147,7 @@ let state = {
   winRatesSearch: "",
   winRatesTypeFilter: "all", // all, pockets, suited, offsuit
   winRatesPlayersCount: "all", // all, 2, 3, 4, 5, 6
+  historyTab: "winRates", // winRates, history
   
   // Active Tournament
   tour: {
@@ -363,29 +364,101 @@ function createSettingsScreenHtml() {
  */
 function createHistoryScreenHtml() {
   const history = getHistory();
-  return `
-    <div class="flex-1 flex flex-col p-6 fade-in overflow-hidden h-full">
-      <div class="flex items-center justify-between mb-4 pb-3 border-b border-neutral-900 flex-shrink-0">
-        <h2 class="text-lg font-bold font-display text-neutral-200">${t("handHistory")}</h2>
-        <div class="flex items-center gap-2">
-          ${history.length > 0 ? `
-            <button id="btn-copy-history" class="text-[10px] bg-amber-500 hover:bg-amber-400 text-neutral-950 font-extrabold py-1.5 px-3 rounded shadow transition-colors flex items-center gap-1 cursor-pointer">
-              COPY RESULTS
-            </button>
-          ` : ""}
-          <button id="btn-history-back" class="text-xs text-neutral-400 font-medium bg-neutral-900 py-1.5 px-3 rounded-md hover:text-white">
-            ${t("back")}
-          </button>
+  const isWinRatesActive = state.historyTab === "winRates";
+  
+  // Tab headers translations or defaults
+  const winRatesTabLabel = state.lang === "ja" ? "人数別勝率表" : "Win Rate Table";
+  const handHistoryTabLabel = state.lang === "ja" ? "ハンド履歴" : "Hand History";
+  
+  const titleText = state.lang === "ja" ? "勝率表 / ハンド履歴" : "Win Rates / Hand History";
+
+  let innerContentHtml = "";
+  let headerActionHtml = "";
+
+  if (isWinRatesActive) {
+    const availableFilters = [
+      { id: "all", ja: "全テーブル", en: "All Tables" },
+      { id: 2, ja: "2人 (2P)", en: "2 Players" },
+      { id: 3, ja: "3人 (3P)", en: "3 Players" },
+      { id: 4, ja: "4人 (4P)", en: "4 Players" },
+      { id: 5, ja: "5人 (5P)", en: "5 Players" },
+      { id: 6, ja: "6人 (6P)", en: "6 Players" },
+      { id: 7, ja: "7人 (7P)", en: "7 Players" },
+      { id: 8, ja: "8人 (8P)", en: "8 Players" },
+      { id: 9, ja: "9人 (9P)", en: "9 Players" }
+    ];
+
+    let gridsHtml = "";
+    if (state.winRatesPlayersCount === "all") {
+      gridsHtml = [2, 3, 4, 5, 6, 7, 8, 9].map(count => renderSingleMatrixGrid(count)).join("");
+    } else {
+      gridsHtml = renderSingleMatrixGrid(Number(state.winRatesPlayersCount));
+    }
+
+    innerContentHtml = `
+      <div class="flex flex-col flex-1 overflow-hidden h-full">
+        <!-- TABS SELECTOR for Win Rates Player Counts -->
+        <div class="flex-shrink-0 mb-3 bg-neutral-900/50 p-1.5 rounded-lg border border-neutral-900">
+          <div class="flex flex-wrap gap-1 justify-center max-h-[85px] overflow-y-auto w-full">
+            ${availableFilters.map(tab => {
+              const label = state.lang === "ja" ? tab.ja : tab.en;
+              const active = state.winRatesPlayersCount === tab.id || (state.winRatesPlayersCount === "all" && tab.id === "all");
+              return `
+                <button 
+                  class="text-[7.5px] py-1 px-1.5 rounded font-black font-sans transition-colors tracking-tight ${active ? "bg-amber-500 text-neutral-950 font-bold" : "text-neutral-400 hover:text-neutral-200 bg-neutral-950/50"}"
+                  onclick="window.handleWinRatesPlayerTab('${tab.id}')"
+                >
+                  ${label}
+                </button>
+              `;
+            }).join("")}
+          </div>
+        </div>
+
+        <!-- LEGEND / INFORMATION BAR -->
+        <div class="flex-shrink-0 mb-3 flex flex-wrap justify-center gap-x-4 gap-y-1.5 bg-neutral-900/30 p-2 rounded-lg border border-neutral-900 text-[8.5px] select-none font-mono text-center">
+          <div class="flex items-center gap-1">
+            <span class="w-3 h-3 rounded bg-neutral-900/30 border border-neutral-850/40 inline-block shrink-0"></span>
+            <span class="text-neutral-300 font-semibold">${state.lang === "ja" ? "右上: スーテッド" : "Upper-Right: Suited"}</span>
+          </div>
+          <div class="flex items-center gap-1">
+            <span class="w-3 h-3 rounded bg-neutral-900/15 border border-neutral-850/20 inline-block shrink-0"></span>
+            <span class="text-neutral-300 font-semibold">${state.lang === "ja" ? "左下: オフスーツ" : "Lower-Left: Offsuit"}</span>
+          </div>
+          <div class="flex items-center gap-1">
+            <span class="text-emerald-400 font-black text-xs shrink-0">●</span>
+            <span class="text-emerald-400 font-bold">${state.lang === "ja" ? "緑: 上位40ハンド" : "Green: Top 40"}</span>
+          </div>
+        </div>
+
+        <!-- PREFLOP WIN RATE GRIDS -->
+        <div class="flex-1 overflow-y-auto pr-1 min-h-0">
+          ${gridsHtml}
+        </div>
+        
+        <div class="text-[8.5px] text-neutral-600 font-mono text-center mt-2.5 select-none flex-shrink-0 leading-tight">
+          ${state.lang === "ja" ? "※表示される勝率は、全員が最後までフォールドせずにショーダウンした場合の期待勝率です" : "*Scores indicate percentage likelihood of winning at showdown"}
         </div>
       </div>
+    `;
+  } else {
+    // Hand History active
+    if (history.length > 0) {
+      headerActionHtml = `
+        <button id="btn-copy-history" class="text-[10px] bg-amber-500 hover:bg-amber-400 text-neutral-950 font-extrabold py-1.5 px-3 rounded shadow transition-colors flex items-center gap-1 cursor-pointer">
+          COPY RESULTS
+        </button>
+      `;
+    }
 
-      <div class="flex-1 overflow-y-auto pr-0.5 space-y-2">
+    innerContentHtml = `
+      <div class="flex-1 overflow-y-auto pr-0.5 space-y-2 mt-1">
         ${history.length === 0 ? `
           <div class="text-neutral-500 text-xs text-center py-12">${t("noHistory")}</div>
         ` : history.map((h, i) => {
           const isWin = h.result === "Win";
           return `
-            <div class="p-3 bg-neutral-900/60 rounded-lg border border-neutral-900/80 flex items-center justify-between">
+            <div class="p-3 bg-neutral-900/60 rounded-lg border border-neutral-900/80 flex items-center justify-between animate-fade-in">
               <div>
                 <div class="flex items-center gap-1.5">
                   <span class="font-display font-semibold text-neutral-200 text-sm tracking-wider">${h.hand}</span>
@@ -404,6 +477,45 @@ function createHistoryScreenHtml() {
           `;
         }).join("")}
       </div>
+    `;
+  }
+
+  // Segmented control switcher UI list
+  const switcherHtml = `
+    <div class="flex-shrink-0 mb-4 bg-neutral-900/80 p-1 rounded-xl border border-neutral-850 flex w-full">
+      <button 
+        class="flex-1 text-center py-2.5 rounded-lg text-xs font-display font-medium tracking-wide transition-all ${isWinRatesActive ? "bg-amber-500 text-neutral-950 shadow-md font-extrabold" : "text-neutral-400 hover:text-neutral-200"}"
+        onclick="window.changeHistoryTab('winRates')"
+      >
+        ${winRatesTabLabel}
+      </button>
+      <button 
+        class="flex-1 text-center py-2.5 rounded-lg text-xs font-display font-medium tracking-wide transition-all ${!isWinRatesActive ? "bg-amber-500 text-neutral-950 shadow-md font-extrabold" : "text-neutral-400 hover:text-neutral-200"}"
+        onclick="window.changeHistoryTab('history')"
+      >
+        ${handHistoryTabLabel} (${history.length})
+      </button>
+    </div>
+  `;
+
+  return `
+    <div class="flex-1 flex flex-col p-6 fade-in overflow-hidden h-full relative">
+      <!-- HEADER -->
+      <div class="flex items-center justify-between mb-4 pb-3 border-b border-neutral-900 flex-shrink-0">
+        <h2 class="text-sm font-black tracking-wider text-amber-500 uppercase font-display truncate pr-2">${titleText}</h2>
+        <div class="flex items-center gap-2 flex-shrink-0">
+          ${headerActionHtml}
+          <button id="btn-history-back" class="text-xs text-neutral-400 font-medium bg-neutral-900 py-1.5 px-3 rounded-md hover:text-white">
+            ${t("back")}
+          </button>
+        </div>
+      </div>
+
+      <!-- SWITCHER TABS -->
+      ${switcherHtml}
+
+      <!-- MAIN INNER TAB VIEW -->
+      ${innerContentHtml}
     </div>
   `;
 }
@@ -820,7 +932,6 @@ function createWinRatesOverlayHtml() {
  * PLAYER COUNT SELECT SCREEN
  */
 function createPlayerCountScreenHtml() {
-  const winRatesOverlayHtml = createWinRatesOverlayHtml();
   return `
     <div class="flex-1 flex flex-col justify-between p-6 fade-in relative">
       <div>
@@ -831,9 +942,9 @@ function createPlayerCountScreenHtml() {
           </button>
         </div>
 
-        <p class="text-xs text-neutral-400 mb-4 font-medium">${t("selectPlayersCount")}</p>
+        <p class="text-xs text-neutral-400 mb-6 font-medium">${t("selectPlayersCount")}</p>
 
-        <div class="grid grid-cols-1 gap-1.5 mb-6 max-h-[290px] overflow-y-auto pr-1">
+        <div class="grid grid-cols-1 gap-1.5 mb-6 max-h-[340px] overflow-y-auto pr-1">
           ${[2, 3, 4, 5, 6, 7, 8, 9].map(count => {
             const desc = count === 2 
               ? "Heads-Up" 
@@ -843,27 +954,18 @@ function createPlayerCountScreenHtml() {
                   ? "9-Max Full Ring Tournament" 
                   : `${count}-Max Tournament`;
             return `
-              <button class="py-2 px-3 bg-neutral-900 border border-neutral-800 rounded-lg font-display font-semibold hover:border-amber-500/50 hover:text-amber-500 text-neutral-200 transition-colors flex items-center justify-between" onclick="selectPlayerCount(${count})">
+              <button class="py-2 px-3 bg-neutral-900 border border-neutral-800 rounded-lg font-display font-semibold hover:border-amber-500/50 hover:text-amber-500 text-neutral-200 transition-colors flex items-center justify-between animate-fade-in" onclick="selectPlayerCount(${count})">
                 <span class="text-sm font-extrabold">${count}-Max</span>
                 <span class="text-[9px] text-neutral-500 font-mono">${desc}</span>
               </button>
             `;
           }).join("")}
         </div>
-
-        <!-- VIEW WIN RATES BY NUMBER OF PLAYERS BUTTON -->
-        <button id="btn-view-win-rates" class="w-full py-3 px-4 bg-neutral-900 border border-neutral-850 hover:border-amber-500/30 text-amber-500 hover:text-amber-400 font-bold rounded-lg text-xs tracking-wider transition-colors uppercase font-mono flex items-center justify-center gap-2">
-          <svg class="lucide lucide-bar-chart-2" xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
-          ${t("viewWinRates")}
-        </button>
       </div>
 
       <div class="text-[10px] text-neutral-600 font-mono text-center">
         WPT STANDARD BRACKET SPEEDRUN
       </div>
-
-      <!-- overlay dialog -->
-      ${winRatesOverlayHtml}
     </div>
   `;
 }
@@ -1536,19 +1638,6 @@ function bindEvents() {
     renderApp();
   });
 
-  // Win Rates Screen Overlay Buttons
-  const btnViewWinRates = document.getElementById("btn-view-win-rates");
-  if (btnViewWinRates) btnViewWinRates.addEventListener("click", () => {
-    state.showWinRatesOverlay = true;
-    renderApp();
-  });
-
-  const btnCloseWinRates = document.getElementById("btn-close-win-rates");
-  if (btnCloseWinRates) btnCloseWinRates.addEventListener("click", () => {
-    state.showWinRatesOverlay = false;
-    renderApp();
-  });
-
   // In-Game Buttons
   const btnQuit = document.getElementById("btn-quit");
   if (btnQuit) btnQuit.addEventListener("click", () => {
@@ -1597,6 +1686,11 @@ window.toggleEcoMode = function(enabled) {
 
 window.handleWinRatesPlayerTab = function(playerCountVal) {
   state.winRatesPlayersCount = playerCountVal;
+  renderApp();
+};
+
+window.changeHistoryTab = function(tab) {
+  state.historyTab = tab;
   renderApp();
 };
 
