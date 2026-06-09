@@ -233,13 +233,13 @@ function createTitleScreenHtml() {
   if (state.showShareOverlay) {
     shareOverlayHtml = `
       <div class="absolute inset-0 bg-black/85 backdrop-blur-md flex flex-col justify-center items-center p-6 z-50 animate-fade-in">
-        <div class="bg-[#0f0f0f] border border-amber-500/30 rounded-2xl p-6 w-full max-w-xs text-center shadow-[0_0_30px_rgba(245,158,11,0.15)] relative">
+        <div class="bg-[#0f0f0f] border border-neutral-700/40 rounded-2xl p-6 w-full max-w-xs text-center shadow-[0_0_30px_rgba(255,255,255,0.08)] relative">
           <!-- Close Button -->
           <button id="btn-close-share" class="absolute top-3 right-3 text-neutral-400 hover:text-white transition-colors p-1" title="Close">
             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-x"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
           </button>
           
-          <div class="text-xs tracking-wider text-amber-500 font-extrabold uppercase mb-1">SCAN TO PLAY</div>
+          <div class="text-xs tracking-wider text-neutral-300 font-extrabold uppercase mb-1">SCAN TO PLAY</div>
           <div class="text-[10px] text-neutral-400 mb-4 font-mono">Share this tournament with friends</div>
           
           <!-- QR Code Container -->
@@ -250,7 +250,7 @@ function createTitleScreenHtml() {
           <!-- Copy Link Section -->
           <div class="flex items-center gap-1.5 bg-neutral-950/80 border border-neutral-800 rounded-lg p-1.5 pl-2.5 mb-1 text-left">
             <input type="text" readonly value="${currentUrl}" id="share-url-input" class="bg-transparent text-[10px] font-mono text-neutral-300 flex-1 outline-none pointer-events-auto select-all" />
-            <button id="btn-copy-url" class="bg-amber-500 hover:bg-amber-400 text-neutral-950 text-[9px] font-extrabold px-2.5 py-1 rounded transition-colors select-none">
+            <button id="btn-copy-url" class="bg-neutral-200 hover:bg-neutral-300 text-neutral-950 text-[9px] font-extrabold px-2.5 py-1 rounded transition-colors select-none">
               COPY
             </button>
           </div>
@@ -263,24 +263,24 @@ function createTitleScreenHtml() {
   return `
     <div class="flex-1 flex flex-col justify-between p-6 relative fade-in">
       <!-- Share Button -->
-      <button id="btn-share" class="absolute top-4 right-4 bg-neutral-900/60 hover:bg-neutral-800 border border-neutral-800 rounded-full w-9 h-9 flex items-center justify-center transition-all duration-150 shadow-lg text-amber-500 hover:text-amber-400 z-10 animate-fade-in" title="Share App">
+      <button id="btn-share" class="absolute top-4 right-4 bg-neutral-900/60 hover:bg-neutral-800 border border-neutral-800 rounded-full w-9 h-9 flex items-center justify-center transition-all duration-150 shadow-lg text-neutral-400 hover:text-white z-10 animate-fade-in" title="Share App">
         <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-share-2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
       </button>
 
       <div class="flex-1 flex flex-col justify-center items-center text-center">
         <!-- WPT TV Show Inspired Elegant Logo Stack -->
         <div class="relative mb-2">
-          <div class="text-[10px] tracking-[0.3em] font-semibold text-amber-500 font-display">WORLD POKER CHAMPIONS</div>
-          <div class="absolute -top-1 -bottom-1 -left-4 -right-4 border-y border-amber-500/20"></div>
+          <div class="text-[10px] tracking-[0.3em] font-semibold text-neutral-300 font-display">WORLD POKER CHAMPIONS</div>
+          <div class="absolute -top-1 -bottom-1 -left-4 -right-4 border-y border-neutral-500/20"></div>
         </div>
         <h1 class="text-4xl font-extrabold tracking-tighter text-neutral-100 font-display mt-2">
-          WPT <span class="text-amber-500">HOLD'EM</span>
+          WPT <span class="text-neutral-200 font-black">HOLD'EM</span>
         </h1>
         <div class="text-xs text-neutral-500 tracking-widest font-mono mt-1">TOURNAMENT SPEED-SIM</div>
       </div>
 
       <div class="flex flex-col gap-3.5 mb-12">
-        <button id="btn-start" class="btn-wpt-gold py-4 px-6 rounded-lg text-sm tracking-wider font-semibold active:scale-98 transition-transform">
+        <button id="btn-start" class="btn-wpt-silver py-4 px-6 rounded-lg text-sm tracking-wider font-semibold active:scale-98 transition-transform">
           ${t("start")}
         </button>
         <button id="btn-settings" class="btn-wpt-dark py-3 px-6 rounded-lg text-sm tracking-wide font-medium active:scale-98 transition-transform">
@@ -322,10 +322,10 @@ function createSettingsScreenHtml() {
             ${t("language")}
           </label>
           <div class="grid grid-cols-2 gap-3">
-            <button id="lang-ja" class="py-2.5 px-4 text-xs font-medium rounded-lg border ${state.lang === "ja" ? "border-amber-500 text-amber-500 bg-amber-500/5" : "border-neutral-800 text-neutral-400"}" onclick="changeLanguage('ja')">
+            <button id="lang-ja" class="py-2.5 px-4 text-xs font-medium rounded-lg border ${state.lang === "ja" ? "border-neutral-200 text-neutral-100 bg-neutral-200/5" : "border-neutral-800 text-neutral-400"}" onclick="changeLanguage('ja')">
               日本語
             </button>
-            <button id="lang-en" class="py-2.5 px-4 text-xs font-medium rounded-lg border ${state.lang === "en" ? "border-amber-500 text-amber-500 bg-amber-500/5" : "border-neutral-800 text-neutral-400"}" onclick="changeLanguage('en')">
+            <button id="lang-en" class="py-2.5 px-4 text-xs font-medium rounded-lg border ${state.lang === "en" ? "border-neutral-200 text-neutral-100 bg-neutral-200/5" : "border-neutral-800 text-neutral-400"}" onclick="changeLanguage('en')">
               English
             </button>
           </div>
@@ -594,15 +594,15 @@ function createDifficultySelectScreenHtml() {
           ${difficulties.map(diff => {
             const active = state.difficulty === diff.key || (state.difficulty === "normal" && diff.key === "casual") || (state.difficulty === "pro" && diff.key === "expert");
             return `
-              <button class="py-3 px-4 bg-[#0a0a0a] border ${active ? "border-amber-500 bg-amber-500/5 text-amber-500" : "border-neutral-900 text-neutral-300"} rounded-lg font-display hover:border-amber-500/50 transition-all text-left flex items-center justify-between cursor-pointer" onclick="confirmDifficultyAndStart('${diff.key}')">
+              <button class="py-3 px-4 bg-[#0a0a0a] border ${active ? "border-neutral-200 bg-neutral-200/5 text-neutral-100" : "border-neutral-900 text-neutral-300"} rounded-lg font-display hover:border-neutral-400 transition-all text-left flex items-center justify-between cursor-pointer" onclick="confirmDifficultyAndStart('${diff.key}')">
                 <div class="flex-1 min-w-0 pr-2">
                   <div class="font-bold flex items-center gap-1.5">
-                    <span class="text-[9px] text-amber-500 font-mono font-black border border-amber-500/30 px-1 py-0.5 rounded leading-none">LV.${diff.num}</span>
+                    <span class="text-[9px] text-neutral-200 font-mono font-black border border-neutral-600 px-1 py-0.5 rounded leading-none">LV.${diff.num}</span>
                     <span class="text-xs tracking-wider">${diff.name}</span>
                   </div>
                   <div class="text-[9px] text-neutral-500 truncate mt-1.5">${diff.desc}</div>
                 </div>
-                <div class="w-5 h-5 rounded-full border border-neutral-850 flex items-center justify-center shrink-0 ${active ? "bg-amber-500 border-amber-500 text-neutral-950" : ""}">
+                <div class="w-5 h-5 rounded-full border border-neutral-850 flex items-center justify-center shrink-0 ${active ? "bg-neutral-200 border-neutral-200 text-neutral-950" : ""}">
                   ${active ? `<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-check"><polyline points="20 6 9 17 4 12"/></svg>` : ""}
                 </div>
               </button>
@@ -954,7 +954,7 @@ function createPlayerCountScreenHtml() {
                   ? "9-Max Full Ring Tournament" 
                   : `${count}-Max Tournament`;
             return `
-              <button class="py-2 px-3 bg-neutral-900 border border-neutral-800 rounded-lg font-display font-semibold hover:border-amber-500/50 hover:text-amber-500 text-neutral-200 transition-colors flex items-center justify-between animate-fade-in" onclick="selectPlayerCount(${count})">
+              <button class="py-2 px-3 bg-neutral-900 border border-neutral-800 rounded-lg font-display font-semibold hover:border-neutral-200 hover:text-white text-neutral-200 transition-colors flex items-center justify-between animate-fade-in" onclick="selectPlayerCount(${count})">
                 <span class="text-sm font-extrabold">${count}-Max</span>
                 <span class="text-[9px] text-neutral-500 font-mono">${desc}</span>
               </button>

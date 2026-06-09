@@ -168,6 +168,20 @@ body {
   background: linear-gradient(180deg, #c59f2a 0%, #906e0c 100%);
 }
 
+/* Elegant Silver/Light-Gray primary triggers */
+.btn-wpt-silver {
+  background: linear-gradient(180deg, #f5f5f7 0%, #d4d4d8 100%);
+  border: 1px solid #ffffff;
+  color: #000000;
+  font-weight: 700;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  text-shadow: 0 0.5px 0.5px rgba(255, 255, 255, 0.5);
+}
+.btn-wpt-silver:active {
+  transform: translateY(1px);
+  background: linear-gradient(180deg, #e4e4e7 0%, #a1a1aa 100%);
+}
+
 .btn-wpt-dark {
   background: linear-gradient(to bottom, #222, #111);
   border: 1px solid rgba(255, 255, 255, 0.2);
