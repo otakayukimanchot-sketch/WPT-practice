@@ -1142,6 +1142,7 @@ function renderSeatHoleCards(p) {
  * Return real-time confirmed hand description name
  */
 function getConfirmedHandName(p) {
+  if (!p.isHero) return "";
   const tour = state.tour;
   if (!p.cards || p.cards.length !== 2) return "";
   const merged = [...p.cards, ...(tour.community || [])];
