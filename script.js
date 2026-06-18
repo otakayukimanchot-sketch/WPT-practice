@@ -458,9 +458,9 @@ function createHistoryScreenHtml() {
         ` : history.map((h, i) => {
           const isWin = h.result === "Win";
           return `
-            <div class="p-3 bg-neutral-900/60 rounded-lg border border-neutral-900/80 flex items-center justify-between animate-fade-in">
+            <div class="p-3 bg-neutral-900/60 rounded-lg border border-neutral-900/80 flex items-center justify-between animate-fade-in font-sans">
               <div>
-                <div class="flex items-center gap-1.5">
+                <div class="flex items-center gap-1.5 flex-wrap">
                   <span class="font-display font-semibold text-neutral-200 text-sm tracking-wider">${h.hand}</span>
                   <span class="font-mono text-[9px] text-neutral-400 bg-neutral-800 px-1.5 py-0.5 rounded">${h.playersCount}-max</span>
                 </div>
@@ -468,10 +468,23 @@ function createHistoryScreenHtml() {
                   ${t("expectedWin")}: <span class="text-neutral-300 font-semibold">${h.expectedRate}%</span>
                 </div>
               </div>
-              <div class="text-right">
+              <div class="flex items-center gap-2">
                 <span class="text-xs font-semibold px-2 py-0.5 rounded ${isWin ? "bg-emerald-950/40 text-emerald-400 border border-emerald-900/40" : "bg-neutral-950/60 text-neutral-500 border border-neutral-900"}">
                   ${isWin ? t("win") : t("lose")}
                 </span>
+                
+                <button 
+                  id="btn-copy-single-${i}"
+                  onclick="event.stopPropagation(); window.copySingleHandHistory(${i});"
+                  class="text-[9px] bg-neutral-850 hover:bg-neutral-800 text-neutral-200 hover:text-white border border-neutral-800 px-2.5 py-1 rounded transition-colors flex items-center gap-1.5 cursor-pointer select-none"
+                  title="Copy log to clipboard"
+                >
+                  <svg class="w-2.5 h-2.5 text-amber-500 shrink-0" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                  </svg>
+                  <span>Copy Log</span>
+                </button>
               </div>
             </div>
           `;
@@ -1612,9 +1625,11 @@ function bindEvents() {
       const historyList = getHistory();
       if (historyList.length === 0) return;
       
-      const text = historyList.map((h, index) => {
+      let text = historyList.map((h, index) => {
         return `Hand #${historyList.length - index}: ${h.hand} (${h.playersCount}-max) | Preflop Win: ${h.expectedRate}% | Result: ${h.result}`;
       }).join("\n");
+      
+      text += "\n\nBased on the hand history above, please analyze the players' gameplay and provide advice on areas for improvement.";
       
       navigator.clipboard.writeText(text).then(() => {
         const originalText = btnCopyHistory.textContent;
@@ -1693,6 +1708,32 @@ window.handleWinRatesPlayerTab = function(playerCountVal) {
 window.changeHistoryTab = function(tab) {
   state.historyTab = tab;
   renderApp();
+};
+
+window.copySingleHandHistory = function(idx) {
+  const history = getHistory();
+  const record = history[idx];
+  if (record) {
+    let handContent = record.fullEnglishHandHistory || `**Game Format:**\nNLHE ${record.playersCount}-Max Speed-Sim Tournament\n\n**Hand:**\n${record.hand}\n\n**Result:**\n${record.result}\n(Detailed hand log is available for new hands played in this session)`;
+    
+    handContent += "\n\nBased on the hand history above, please analyze the players' gameplay and provide advice on areas for improvement.";
+    
+    navigator.clipboard.writeText(handContent).then(() => {
+      const btn = document.getElementById(`btn-copy-single-${idx}`);
+      if (btn) {
+        const orig = btn.innerHTML;
+        btn.innerHTML = `
+          <svg class="w-3 h-3 text-emerald-400" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24">
+            <polyline points="20 6 9 17 4 12"></polyline>
+          </svg>
+          <span class="text-emerald-400 text-[9px] font-bold">Copied!</span>
+        `;
+        setTimeout(() => { btn.innerHTML = orig; }, 1500);
+      }
+    }).catch(e => {
+      alert("Failed to copy hand history to clipboard.");
+    });
+  }
 };
 
 /**
@@ -1882,7 +1923,13 @@ function nextHand() {
   const deck = createShuffledDeck();
 
   // 6. Reset each player state
+  tour.startingStacks = {};
+  tour.actionLog = [`--- Hand #${tour.handCount} ---`];
+
   tour.players.forEach(p => {
+    if (p.isActive) {
+      tour.startingStacks[p.id] = p.stack;
+    }
     p.isFolded = !p.isActive;
     p.isAllIn = false;
     p.totalBet = 0;
@@ -1906,6 +1953,12 @@ function nextHand() {
 
   // 7. Deduct force blind bets
   postBlinds();
+
+  if (heroPlayer && heroPlayer.isActive) {
+    const cardStr = heroPlayer.cards.map(c => c.rankLabel + c.suit.toLowerCase()).join(" ");
+    tour.actionLog.push(`*** HOLE CARDS ***`);
+    tour.actionLog.push(`Dealt to Hero [ ${cardStr} ]`);
+  }
 
   // 8. Start betting round (UTG acts first in preflop, i.e. person left of BB)
   let firstActorId;
@@ -1970,6 +2023,26 @@ function postBlinds() {
   }
 
   tour.currentRoundMaxBet = Math.max(sbPlayer.totalBet, bbPlayer.totalBet);
+
+  const sbPos = getPlayerPositionLabel(sbPlayer);
+  const bbPos = getPlayerPositionLabel(bbPlayer);
+  
+  const sbAmt = sbPlayer.totalBet;
+  const bbAmt = bbPlayer.totalBet;
+  
+  if (tour.actionLog) {
+    if (sbPlayer.isHero) {
+      tour.actionLog.push(`Hero (${sbPos}) posts small blind of $${sbAmt}`);
+    } else {
+      tour.actionLog.push(`${sbPlayer.name} (${sbPos}) posts small blind of $${sbAmt}`);
+    }
+    
+    if (bbPlayer.isHero) {
+      tour.actionLog.push(`Hero (${bbPos}) posts big blind of $${bbAmt}`);
+    } else {
+      tour.actionLog.push(`${bbPlayer.name} (${bbPos}) posts big blind of $${bbAmt}`);
+    }
+  }
 }
 
 /**
@@ -2094,12 +2167,26 @@ function advanceToNextStreet() {
   if (tour.stage === "PREFLOP") {
     tour.stage = "FLOP";
     tour.community.push(tour.deck.pop(), tour.deck.pop(), tour.deck.pop());
+    if (tour.actionLog) {
+      const suitsStr = tour.community.slice(0, 3).map(c => c.rankLabel + c.suit.toLowerCase()).join(" ");
+      tour.actionLog.push(`*** FLOP *** [ ${suitsStr} ]`);
+    }
   } else if (tour.stage === "FLOP") {
     tour.stage = "TURN";
     tour.community.push(tour.deck.pop());
+    if (tour.actionLog) {
+      const turnCard = tour.community[3].rankLabel + tour.community[3].suit.toLowerCase();
+      const suitsStr = tour.community.slice(0, 3).map(c => c.rankLabel + c.suit.toLowerCase()).join(" ");
+      tour.actionLog.push(`*** TURN *** [ ${suitsStr} ] [ ${turnCard} ]`);
+    }
   } else if (tour.stage === "TURN") {
     tour.stage = "RIVER";
     tour.community.push(tour.deck.pop());
+    if (tour.actionLog) {
+      const riverCard = tour.community[4].rankLabel + tour.community[4].suit.toLowerCase();
+      const suitsStr = tour.community.slice(0, 4).map(c => c.rankLabel + c.suit.toLowerCase()).join(" ");
+      tour.actionLog.push(`*** RIVER *** [ ${suitsStr} ] [ ${riverCard} ]`);
+    }
   } else if (tour.stage === "RIVER") {
     tour.stage = "SHOWDOWN";
     concludeRoundWithShowdown();
@@ -2147,9 +2234,17 @@ function handleHeroAction(actionType) {
     hero.actionColor = "red";
     hero.actedThisRound = true;
     tour.lastRaiserId = 0; // counted as acted
+    
+    if (tour.actionLog) {
+      const pos = getPlayerPositionLabel(hero);
+      tour.actionLog.push(`Hero (${pos}) folds`);
+    }
+
     setNextPlayerTurn();
     setTimeout(runTurnCycle, 15);
   } else if (actionType === "CALL") {
+    const origStack = hero.stack;
+    const origCall = callPrice;
     if (callPrice >= hero.stack) {
       // forced all-in call
       hero.totalBet += hero.stack;
@@ -2157,11 +2252,25 @@ function handleHeroAction(actionType) {
       hero.isAllIn = true;
       hero.actionText = t("allin");
       hero.actionColor = "yellow";
+      
+      if (tour.actionLog) {
+        const pos = getPlayerPositionLabel(hero);
+        tour.actionLog.push(`Hero (${pos}) calls $${origStack} and is all-in`);
+      }
     } else {
       hero.totalBet += callPrice;
       hero.stack -= callPrice;
       hero.actionText = callPrice <= 0 ? t("check") : t("call");
       hero.actionColor = "gray";
+      
+      if (tour.actionLog) {
+        const pos = getPlayerPositionLabel(hero);
+        if (origCall <= 0) {
+          tour.actionLog.push(`Hero (${pos}) checks`);
+        } else {
+          tour.actionLog.push(`Hero (${pos}) calls $${origCall}`);
+        }
+      }
     }
     hero.actedThisRound = true;
 
@@ -2182,12 +2291,23 @@ function handleHeroAction(actionType) {
     setTimeout(runTurnCycle, 15);
   } else if (actionType === "ALLIN") {
     const raiseContribution = hero.stack;
+    const oldBet = hero.totalBet;
     hero.totalBet += raiseContribution;
     hero.stack = 0;
     hero.isAllIn = true;
     hero.actionText = t("allin");
     hero.actionColor = "yellow";
     hero.actedThisRound = true;
+    
+    if (tour.actionLog) {
+      const pos = getPlayerPositionLabel(hero);
+      const isBetOrRaise = hero.totalBet > oldRoundMaxBet;
+      if (isBetOrRaise) {
+        tour.actionLog.push(`Hero (${pos}) raises to $${hero.totalBet} and is all-in`);
+      } else {
+        tour.actionLog.push(`Hero (${pos}) bets $${raiseContribution} and is all-in`);
+      }
+    }
     
     const isBetOrRaise = hero.totalBet > oldRoundMaxBet;
     if (isBetOrRaise) {
@@ -2229,6 +2349,11 @@ window.handleHeroRaise = function(amt) {
   hero.actionText = `${t("raise")} $${requiredCommit}`;
   hero.actionColor = "green";
   hero.actedThisRound = true;
+
+  if (tour.actionLog) {
+    const pos = getPlayerPositionLabel(hero);
+    tour.actionLog.push(`Hero (${pos}) raises to $${requiredTotalBet}`);
+  }
 
   const isBetOrRaise = hero.totalBet > oldRoundMaxBet;
   if (isBetOrRaise) {
@@ -2481,6 +2606,10 @@ function executeCpuTurn(p) {
     p.isFolded = true;
     p.actionText = t("fold");
     p.actionColor = "red";
+    if (tour.actionLog) {
+      const pos = getPlayerPositionLabel(p);
+      tour.actionLog.push(`${p.name} (${pos}) folds`);
+    }
   } else if (decision === "RAISE") {
     // Compute logical raise
     const bSize = tour.bbSize;
@@ -2495,30 +2624,52 @@ function executeCpuTurn(p) {
     const requiredCommit = callPrice + raiseAmt;
     if (requiredCommit >= p.stack) {
       // Force all-in choice
+      const origStack = p.stack;
       p.totalBet += p.stack;
       p.stack = 0;
       p.isAllIn = true;
       p.actionText = t("allin");
       p.actionColor = "yellow";
+      if (tour.actionLog) {
+        const pos = getPlayerPositionLabel(p);
+        tour.actionLog.push(`${p.name} (${pos}) raises to $${p.totalBet} and is all-in`);
+      }
     } else {
       p.stack -= requiredCommit;
       p.totalBet += requiredCommit;
       p.actionText = `${t("raise")} $${requiredCommit}`;
       p.actionColor = "green";
+      if (tour.actionLog) {
+        const pos = getPlayerPositionLabel(p);
+        tour.actionLog.push(`${p.name} (${pos}) raises to $${p.totalBet}`);
+      }
     }
   } else {
     // CALL or CHECK
     if (callPrice >= p.stack) {
+      const origStack = p.stack;
       p.totalBet += p.stack;
       p.stack = 0;
       p.isAllIn = true;
       p.actionText = t("allin");
       p.actionColor = "yellow";
+      if (tour.actionLog) {
+        const pos = getPlayerPositionLabel(p);
+        tour.actionLog.push(`${p.name} (${pos}) calls $${origStack} and is all-in`);
+      }
     } else {
       p.totalBet += callPrice;
       p.stack -= callPrice;
       p.actionText = callPrice <= 0 ? t("check") : t("call");
       p.actionColor = "gray";
+      if (tour.actionLog) {
+        const pos = getPlayerPositionLabel(p);
+        if (callPrice <= 0) {
+          tour.actionLog.push(`${p.name} (${pos}) checks`);
+        } else {
+          tour.actionLog.push(`${p.name} (${pos}) calls $${callPrice}`);
+        }
+      }
     }
   }
 
@@ -2590,6 +2741,12 @@ function concludeRoundWithNoShowdown() {
     isHero: winner.isHero
   }];
 
+  if (tour.actionLog) {
+    const sbStr = winner.isHero ? "Hero" : winner.name;
+    const pStr = getPlayerPositionLabel(winner);
+    tour.actionLog.push(`${sbStr} (${pStr}) wins pot of $${tour.pot} (Everyone Folded)`);
+  }
+
   // If winner is Hero, save to history
   if (winner.id === 0) {
     saveHandResultToHistory(winner.cards, true);
@@ -2622,6 +2779,15 @@ function concludeRoundWithShowdown() {
 
   const showDownCandidates = tour.players.filter(p => p.isActive && !p.isFolded);
   
+  if (tour.actionLog) {
+    tour.actionLog.push(`*** SHOWDOWN ***`);
+    showDownCandidates.forEach(p => {
+      const cardStr = p.cards.map(c => c.rankLabel + c.suit.toLowerCase()).join(" ");
+      const pos = getPlayerPositionLabel(p);
+      tour.actionLog.push(`${p.isHero ? "Hero" : p.name} (${pos}) shows [ ${cardStr} ]`);
+    });
+  }
+
   // Rank showdown hand value for each
   const showdownEvaluated = showDownCandidates.map(p => {
     const merged = [...p.cards, ...tour.community];
@@ -2679,6 +2845,13 @@ function concludeRoundWithShowdown() {
         wonAmount: share,
         isHero: p.isHero
       });
+
+      if (tour.actionLog) {
+        const sbStr = p.isHero ? "Hero" : p.name;
+        const pStr = getPlayerPositionLabel(p);
+        const handNameLabel = matchedEval ? matchedEval.bestHand.typeName : "";
+        tour.actionLog.push(`${sbStr} (${pStr}) wins pot of $${share} with ${handNameLabel}`);
+      }
     } else if (!p.isFolded) {
       p.actionText = t("fold");
       p.actionColor = "red";
@@ -3051,12 +3224,15 @@ function saveHandResultToHistory(cards, isWin) {
   const idx = Math.max(0, Math.min(4, activeCount - 2));
   const winRate = PF_PROBS[pfKey] ? PF_PROBS[pfKey][idx] : 15;
   
+  const fullHandLog = compileFullEnglishHandHistory(state.tour);
+  
   const record = {
     hand: pfKey,
     playersCount: activeCount,
     expectedRate: winRate,
     result: isWin ? "Win" : "Lose",
-    timestamp: Date.now()
+    timestamp: Date.now(),
+    fullEnglishHandHistory: fullHandLog
   };
 
   const history = getHistory();
@@ -3068,4 +3244,118 @@ function saveHandResultToHistory(cards, isWin) {
   }
 
   localStorage.setItem("wpt_history", JSON.stringify(history));
+}
+
+function getPlayerPositionLabel(p) {
+  const tour = state.tour;
+  if (!tour || !tour.players) return "";
+  const activePlayers = tour.players.filter(pl => pl.isActive);
+  const sorted = [...activePlayers].sort((a, b) => a.seatIndex - b.seatIndex);
+  const idx = sorted.findIndex(pl => pl.id === p.id);
+  if (idx === -1) return "";
+  
+  const N = sorted.length;
+  const dealerIdxInSorted = sorted.findIndex(pl => pl.id === tour.dealerIdx);
+  if (dealerIdxInSorted === -1) return "";
+  
+  const steps = (idx - dealerIdxInSorted + N) % N;
+  
+  if (N === 2) {
+    if (steps === 0) return "BTN";
+    if (steps === 1) return "BB";
+  }
+  
+  if (steps === 0) return "BTN";
+  if (p.id === tour.sbIdx) return "SB";
+  if (p.id === tour.bbIdx) return "BB";
+  
+  if (N === 9) {
+    if (steps === 3) return "UTG";
+    if (steps === 4) return "UTG+1";
+    if (steps === 5) return "MP";
+    if (steps === 6) return "HJ";
+    if (steps === 7) return "CO";
+  } else if (N === 6) {
+    if (steps === 3) return "UTG";
+    if (steps === 4) return "HJ";
+    if (steps === 5) return "CO";
+  } else if (N === 8) {
+    if (steps === 3) return "UTG";
+    if (steps === 4) return "UTG+1";
+    if (steps === 5) return "MP";
+    if (steps === 6) return "HJ";
+    if (steps === 7) return "CO";
+  } else {
+    if (steps === N - 1) return "CO";
+    if (steps === N - 2) return "HJ";
+    return "UTG" + (steps > 3 ? `+${steps - 3}` : "");
+  }
+  
+  return "UTG";
+}
+
+function getCpuStatsByName(name) {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash += name.charCodeAt(i);
+  }
+  const vpip = 18 + (hash % 17);
+  const pfr = Math.floor(vpip * 0.75 + (hash % 5));
+  const threeBet = 5 + (hash % 8);
+  const sample = 800 + (hash % 21) * 100;
+  
+  return {
+    vpip: vpip.toFixed(1) + "%",
+    pfr: pfr.toFixed(1) + "%",
+    threeBet: threeBet.toFixed(1) + "%",
+    sample: sample.toLocaleString()
+  };
+}
+
+function compileFullEnglishHandHistory(tour) {
+  const countMax = state.playerCount;
+  const formatStr = `NLHE ${countMax}-Max Speed-Sim Tournament (Blinds: ${tour.sbSize} / ${tour.bbSize})`;
+  
+  const hero = tour.players.find(p => p.id === 0);
+  const heroStartingChips = (tour.startingStacks && tour.startingStacks[0] !== undefined) ? tour.startingStacks[0] : hero.stack;
+  const heroBbVal = (heroStartingChips / tour.bbSize).toFixed(1);
+  let stacksStr = `Hero: ${heroBbVal}bb (${heroStartingChips.toLocaleString()} chips)\n`;
+  
+  const opponentsList = tour.players.filter(p => !p.isHero && tour.startingStacks && tour.startingStacks[p.id] !== undefined);
+  opponentsList.forEach(opp => {
+    const oppStartingChips = tour.startingStacks[opp.id];
+    const oppBbVal = (oppStartingChips / tour.bbSize).toFixed(1);
+    stacksStr += `Villain (${opp.name}): ${oppBbVal}bb (${oppStartingChips.toLocaleString()} chips)\n`;
+  });
+  
+  let oppInfoStr = "";
+  opponentsList.forEach(opp => {
+    const stats = getCpuStatsByName(opp.name);
+    oppInfoStr += `- Villain (${opp.name}):\n  VPIP: ${stats.vpip} / PFR: ${stats.pfr} / 3-Bet: ${stats.threeBet}\n  Sample size: ${stats.sample} hands\n`;
+  });
+  if (!oppInfoStr) oppInfoStr = "No opponents in hand";
+  
+  const heroPos = getPlayerPositionLabel(hero);
+  let posStr = `Hero ${heroPos}`;
+  opponentsList.forEach(opp => {
+    const oppPos = getPlayerPositionLabel(opp);
+    posStr += `, Villain (${opp.name}) ${oppPos}`;
+  });
+  
+  let actionsStr = tour.actionLog ? tour.actionLog.join("\n") : "No action recorded";
+  
+  return `**Game Format:**
+${formatStr}
+
+**Stacks:**
+${stacksStr.trim()}
+
+**Opponent Information:**
+${oppInfoStr.trim()}
+
+**Positions:**
+${posStr.trim()}
+
+**Hand History:**
+${actionsStr.trim()}`;
 }
