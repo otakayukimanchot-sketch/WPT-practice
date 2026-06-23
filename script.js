@@ -457,15 +457,30 @@ function createHistoryScreenHtml() {
           <div class="text-neutral-500 text-xs text-center py-12">${t("noHistory")}</div>
         ` : history.map((h, i) => {
           const isWin = h.result === "Win";
+          const chipsBadge = h.chipsWonLost !== undefined ? `
+            <span class="font-mono text-[9px] font-bold px-1.5 py-0.5 rounded ${h.chipsWonLost >= 0 ? "bg-emerald-950/50 text-emerald-400 border border-emerald-900/30" : "bg-red-950/40 text-red-400 border border-red-900/30"}">
+              ${h.chipsWonLost >= 0 ? "+" : ""}$${h.chipsWonLost.toLocaleString()}
+            </span>
+          ` : "";
+          const extraStats = h.vpipRate !== undefined ? `
+            <span class="text-neutral-700">|</span>
+            <span>VPIP: <span class="text-amber-500 font-semibold">${h.vpipRate}%</span></span>
+            <span class="text-neutral-700">|</span>
+            <span>PFR: <span class="text-amber-500 font-semibold">${h.pfrRate}%</span></span>
+            <span class="text-neutral-700">|</span>
+            <span>3-Bet: <span class="text-amber-500 font-semibold">${h.threeBetRate}%</span></span>
+          ` : "";
           return `
             <div class="p-3 bg-neutral-900/60 rounded-lg border border-neutral-900/80 flex items-center justify-between animate-fade-in font-sans">
               <div>
                 <div class="flex items-center gap-1.5 flex-wrap">
                   <span class="font-display font-semibold text-neutral-200 text-sm tracking-wider">${h.hand}</span>
                   <span class="font-mono text-[9px] text-neutral-400 bg-neutral-800 px-1.5 py-0.5 rounded">${h.playersCount}-max</span>
+                  ${chipsBadge}
                 </div>
-                <div class="text-[10px] text-neutral-500 mt-1 font-mono">
-                  ${t("expectedWin")}: <span class="text-neutral-300 font-semibold">${h.expectedRate}%</span>
+                <div class="text-[10px] text-neutral-500 mt-1 font-mono flex items-center gap-1.5 flex-wrap">
+                  <span>${t("expectedWin")}: <span class="text-neutral-300 font-semibold">${h.expectedRate}%</span></span>
+                  ${extraStats}
                 </div>
               </div>
               <div class="flex items-center gap-2">
@@ -1626,10 +1641,22 @@ function bindEvents() {
       if (historyList.length === 0) return;
       
       let text = historyList.map((h, index) => {
-        return `Hand #${historyList.length - index}: ${h.hand} (${h.playersCount}-max) | Preflop Win: ${h.expectedRate}% | Result: ${h.result}`;
+        let line = `Hand #${historyList.length - index}: ${h.hand} (${h.playersCount}-max) | Preflop Win: ${h.expectedRate}% | Result: ${h.result}`;
+        if (h.chipsWonLost !== undefined) {
+          const sign = h.chipsWonLost >= 0 ? "+" : "";
+          line += ` | Chips: ${sign}$${h.chipsWonLost.toLocaleString()}`;
+        }
+        if (h.vpipRate !== undefined) {
+          line += ` | VPIP: ${h.vpipRate}% | PFR: ${h.pfrRate}% | 3-Bet: ${h.threeBetRate}%`;
+        }
+        return line;
       }).join("\n");
       
-      text += "\n\nBased on the hand history above, please analyze the players' gameplay and provide advice on areas for improvement.";
+      const prompt = state.lang === "ja"
+        ? "\n\n上記のハンド履歴に基づいて、プレイヤーのプレイを分析し、改善点についてアドバイスを提供してください。"
+        : "\n\nBased on the hand history above, please analyze the players' gameplay and provide advice on areas for improvement.";
+      
+      text += prompt;
       
       navigator.clipboard.writeText(text).then(() => {
         const originalText = btnCopyHistory.textContent;
@@ -1716,7 +1743,19 @@ window.copySingleHandHistory = function(idx) {
   if (record) {
     let handContent = record.fullEnglishHandHistory || `**Game Format:**\nNLHE ${record.playersCount}-Max Speed-Sim Tournament\n\n**Hand:**\n${record.hand}\n\n**Result:**\n${record.result}\n(Detailed hand log is available for new hands played in this session)`;
     
-    handContent += "\n\nBased on the hand history above, please analyze the players' gameplay and provide advice on areas for improvement.";
+    if (record.chipsWonLost !== undefined) {
+      const sign = record.chipsWonLost >= 0 ? "+" : "";
+      handContent += `\n\n**Hero Chips Won/Lost:**\n${sign}$${record.chipsWonLost.toLocaleString()}`;
+    }
+    if (record.vpipRate !== undefined) {
+      handContent += `\n\n**Cumulative Session Stats:**\nVPIP: ${record.vpipRate}% | PFR: ${record.pfrRate}% | 3-Bet: ${record.threeBetRate}%`;
+    }
+
+    const prompt = state.lang === "ja"
+      ? "\n\n上記のハンド履歴に基づいて、プレイヤーのプレイを分析し、改善点についてアドバイスを提供してください。"
+      : "\n\nBased on the hand history above, please analyze the players' gameplay and provide advice on areas for improvement.";
+    
+    handContent += prompt;
     
     navigator.clipboard.writeText(handContent).then(() => {
       const btn = document.getElementById(`btn-copy-single-${idx}`);
@@ -1925,6 +1964,11 @@ function nextHand() {
   // 6. Reset each player state
   tour.startingStacks = {};
   tour.actionLog = [`--- Hand #${tour.handCount} ---`];
+  
+  tour.heroVpip = false;
+  tour.heroPfr = false;
+  tour.heroThreeBet = false;
+  tour.heroThreeBetOpp = false;
 
   tour.players.forEach(p => {
     if (p.isActive) {
@@ -2228,6 +2272,39 @@ function handleHeroAction(actionType) {
   const callPrice = tour.currentRoundMaxBet - hero.totalBet;
   const oldRoundMaxBet = tour.currentRoundMaxBet;
 
+  // Preflop metrics tracking for Hero
+  if (tour.stage === "PREFLOP") {
+    if (actionType === "FOLD") {
+      if (oldRoundMaxBet > tour.bbSize) {
+        tour.heroThreeBetOpp = true;
+      }
+    } else if (actionType === "CALL") {
+      if (callPrice > 0) {
+        tour.heroVpip = true;
+      }
+      if (oldRoundMaxBet > tour.bbSize) {
+        tour.heroThreeBetOpp = true;
+      }
+    } else if (actionType === "ALLIN") {
+      const isBetOrRaise = (hero.totalBet + hero.stack) > oldRoundMaxBet;
+      if (isBetOrRaise) {
+        tour.heroVpip = true;
+        tour.heroPfr = true;
+        if (oldRoundMaxBet > tour.bbSize) {
+          tour.heroThreeBetOpp = true;
+          tour.heroThreeBet = true;
+        }
+      } else {
+        if (callPrice > 0) {
+          tour.heroVpip = true;
+        }
+        if (oldRoundMaxBet > tour.bbSize) {
+          tour.heroThreeBetOpp = true;
+        }
+      }
+    }
+  }
+
   if (actionType === "FOLD") {
     hero.isFolded = true;
     hero.actionText = t("fold");
@@ -2337,6 +2414,16 @@ window.handleHeroRaise = function(amt) {
   const oldRoundMaxBet = tour.currentRoundMaxBet;
   const requiredTotalBet = tour.currentRoundMaxBet + amt;
   const requiredCommit = requiredTotalBet - hero.totalBet;
+
+  // Preflop metrics tracking for Hero
+  if (tour.stage === "PREFLOP") {
+    tour.heroVpip = true;
+    tour.heroPfr = true;
+    if (oldRoundMaxBet > tour.bbSize) {
+      tour.heroThreeBetOpp = true;
+      tour.heroThreeBet = true;
+    }
+  }
 
   if (requiredCommit >= hero.stack) {
     // fallback all-in
@@ -2747,15 +2834,11 @@ function concludeRoundWithNoShowdown() {
     tour.actionLog.push(`${sbStr} (${pStr}) wins pot of $${tour.pot} (Everyone Folded)`);
   }
 
-  // If winner is Hero, save to history
-  if (winner.id === 0) {
-    saveHandResultToHistory(winner.cards, true);
-  } else {
-    const hero = tour.players.find(p => p.id === 0);
-    if (!hero.isFolded) {
-      // Hero played and lost
-      saveHandResultToHistory(hero.cards, false);
-    }
+  // Save Hero's hand history regardless of whether Hero folded
+  const hero = tour.players.find(p => p.id === 0);
+  if (hero && hero.isActive) {
+    const isHeroWin = winner.id === 0;
+    saveHandResultToHistory(hero.cards, isHeroWin);
   }
 
   tour.stage = "RESULT";
@@ -2863,7 +2946,7 @@ function concludeRoundWithShowdown() {
   // Log history
   const isHeroWin = (potAllocations[0] || 0) > 0;
   const hero = tour.players.find(p => p.id === 0);
-  if (hero.isActive && !hero.isFolded) {
+  if (hero && hero.isActive) {
     saveHandResultToHistory(hero.cards, isHeroWin);
   }
 
@@ -3226,16 +3309,49 @@ function saveHandResultToHistory(cards, isWin) {
   
   const fullHandLog = compileFullEnglishHandHistory(state.tour);
   
+  const hero = state.tour.players.find(p => p.id === 0);
+  const heroStartingChips = (state.tour.startingStacks && state.tour.startingStacks[0] !== undefined) ? state.tour.startingStacks[0] : (hero ? hero.stack : 0);
+  const chipsDiff = hero ? (hero.stack - heroStartingChips) : 0;
+  
+  const history = getHistory();
+  const totalHands = history.length + 1;
+  
+  let vpipCount = state.tour.heroVpip ? 1 : 0;
+  let pfrCount = state.tour.heroPfr ? 1 : 0;
+  let threeBetCount = state.tour.heroThreeBet ? 1 : 0;
+  let threeBetOppCount = state.tour.heroThreeBetOpp ? 1 : 0;
+  
+  history.forEach(h => {
+    if (h.heroVpip) vpipCount++;
+    if (h.heroPfr) pfrCount++;
+    if (h.heroThreeBet) threeBetCount++;
+    if (h.heroThreeBetOpp) threeBetOppCount++;
+  });
+  
+  const currentVpipPercent = (vpipCount / totalHands) * 100;
+  const currentPfrPercent = (pfrCount / totalHands) * 100;
+  const currentThreeBetPercent = threeBetOppCount > 0 ? (threeBetCount / threeBetOppCount) * 100 : 0;
+  
   const record = {
     hand: pfKey,
     playersCount: activeCount,
     expectedRate: winRate,
     result: isWin ? "Win" : "Lose",
     timestamp: Date.now(),
-    fullEnglishHandHistory: fullHandLog
+    fullEnglishHandHistory: fullHandLog,
+    
+    // Additional metrics
+    chipsWonLost: chipsDiff,
+    heroVpip: !!state.tour.heroVpip,
+    heroPfr: !!state.tour.heroPfr,
+    heroThreeBet: !!state.tour.heroThreeBet,
+    heroThreeBetOpp: !!state.tour.heroThreeBetOpp,
+    
+    vpipRate: currentVpipPercent.toFixed(1),
+    pfrRate: currentPfrPercent.toFixed(1),
+    threeBetRate: currentThreeBetPercent.toFixed(1)
   };
 
-  const history = getHistory();
   history.unshift(record);
   
   // Cap at 500 records for storing a much larger history
